@@ -1,0 +1,33 @@
+node_modules/
+dist/
+dist-electron/
+release/
+data/
+*.log
+.DS_Store
+.env
+.env.local
+
+# Whisper — binaries and 3 GB model are too large for git. CI downloads them
+# fresh on each build (see .github/workflows/build.yml).
+resources/whisper/ggml-*.bin
+resources/whisper/whisper.cpp/
+resources/whisper/whisper-cli
+resources/whisper/whisper-cli.exe
+resources/whisper/main
+resources/whisper/main.exe
+resources/whisper/*.dll
+resources/whisper/*.dylib
+
+# Tamil Bible — downloaded + compiled by CI from godlytalias repo on each build.
+resources/bible/tamil-ov-source.json
+resources/bible/tamil-ov.json
+
+# User-provided icon — commit if you want it in CI builds; ignore by default.
+# Comment the next line out if you've added icon.png and want it shipped.
+resources/icons/icon.png
+
+# macOS .dmg etc.
+*.dmg
+*.dmg.blockmap
+release/

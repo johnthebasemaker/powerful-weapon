@@ -1,0 +1,159 @@
+name: Build installers
+
+# Runs on:
+#   - Manual click in the GitHub Actions tab ("Run workflow")
+#   - Every push to the main branch
+#   - Every tag like v0.1.0 (those also create a GitHub Release)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+jobs:
+  # =============================================================
+  #  macOS build → .dmg
+  # =============================================================
+  build-mac:
+    name: Build macOS .dmg
+    runs-on: macos-14   # Apple Silicon runner (arm64)
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install system tools
+        run: brew install cmake ffmpeg
+
+      # Cache the 2.9 GB Whisper model so we don't redownload it every run.
+      - name: Cache Whisper model
+        id: cache-model
+        uses: actions/cache@v4
+        with:
+          path: resources/whisper/ggml-large-v3.bin
+          key: whisper-model-ggml-large-v3
+
+      - name: Download Whisper model (only if not cached)
+        if: steps.cache-model.outputs.cache-hit != 'true'
+        run: |
+          curl -L --retry 10 --retry-delay 15 -C - \
+            -o resources/whisper/ggml-large-v3.bin \
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin"
+
+      # Build whisper.cpp from source (small enough that we don't bother caching).
+      - name: Build whisper.cpp
+        run: |
+          cd resources/whisper
+          git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git
+          cd whisper.cpp
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j --config Release --target whisper-cli
+
+      - name: Install npm dependencies
+        run: npm install --no-audit --no-fund
+
+      # Pull a public Tamil OV Bible so the .dmg ships with the full Bible loaded.
+      - name: Import full Tamil Bible
+        run: |
+          curl -L -o resources/bible/tamil-ov-source.json \
+            "https://raw.githubusercontent.com/godlytalias/Bible-Database/master/Tamil/bible.json"
+          npm run import:bible
+
+      - name: Build .dmg
+        run: npm run package:mac
+
+      - name: Upload .dmg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Powerful-Weapon-macOS
+          path: release/*.dmg
+          retention-days: 30
+
+  # =============================================================
+  #  Windows build → .exe
+  # =============================================================
+  build-windows:
+    name: Build Windows .exe
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Cache the 2.9 GB Whisper model so we don't redownload it every run.
+      - name: Cache Whisper model
+        id: cache-model
+        uses: actions/cache@v4
+        with:
+          path: resources/whisper/ggml-large-v3.bin
+          key: whisper-model-ggml-large-v3-windows
+
+      - name: Download Whisper model (only if not cached)
+        if: steps.cache-model.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest `
+            -Uri "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin" `
+            -OutFile "resources/whisper/ggml-large-v3.bin"
+
+      # Get the prebuilt Windows whisper-cli + dlls.
+      - name: Download Whisper Windows binary
+        shell: pwsh
+        run: |
+          $url = "https://github.com/ggerganov/whisper.cpp/releases/latest/download/whisper-bin-x64.zip"
+          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\whisper-win.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\whisper-win.zip" -DestinationPath "$env:RUNNER_TEMP\whisper-win"
+          # Place binary + dlls flat under resources/whisper/ so paths.ts's flat-layout lookup finds them
+          Copy-Item -Path "$env:RUNNER_TEMP\whisper-win\*" -Destination "resources\whisper\" -Recurse -Force
+          Get-ChildItem "resources\whisper\" | Select-Object Name, Length
+
+      - name: Install npm dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Import full Tamil Bible
+        shell: pwsh
+        run: |
+          Invoke-WebRequest `
+            -Uri "https://raw.githubusercontent.com/godlytalias/Bible-Database/master/Tamil/bible.json" `
+            -OutFile "resources/bible/tamil-ov-source.json"
+          npm run import:bible
+
+      - name: Build .exe
+        run: npm run package:win
+
+      - name: Upload .exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Powerful-Weapon-Windows
+          path: release/*.exe
+          retention-days: 30
+
+  # =============================================================
+  #  Release step (only fires when you push a tag like v0.1.0)
+  # =============================================================
+  release:
+    name: Publish GitHub Release
+    needs: [build-mac, build-windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/Powerful-Weapon-macOS/*.dmg
+            artifacts/Powerful-Weapon-Windows/*.exe
+          generate_release_notes: true

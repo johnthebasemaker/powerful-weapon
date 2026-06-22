@@ -1,0 +1,55 @@
+appId: com.andrewjohnson.powerfulweapon
+productName: Powerful Weapon
+copyright: Copyright (c) 2026 Andrew Johnson
+
+directories:
+  output: release
+  buildResources: resources/icons
+
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+  - node_modules/**/*
+
+extraResources:
+  - from: resources/bible
+    to: bible
+  - from: resources/whisper
+    to: whisper
+    filter:
+      - "**/*"
+
+asarUnpack:
+  - "**/better-sqlite3/**/*"
+  - "resources/whisper/**/*"
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: resources/icons/icon.png
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: resources/icons/icon.png
+  category: public.app-category.productivity
+
+linux:
+  target:
+    - AppImage
+  icon: resources/icons/icon.png
+  category: Education
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Powerful Weapon

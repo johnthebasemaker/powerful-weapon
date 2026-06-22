@@ -152,9 +152,12 @@ jobs:
             }
           }
           if (-not $cli) { throw "No whisper-cli.exe or main.exe found in the downloaded zip" }
-          # Copy whisper-cli.exe + all DLLs into resources/whisper/ (flat layout)
-          Copy-Item "$($cli.DirectoryName)\*.exe" "resources\whisper\" -Force
-          Copy-Item "$($cli.DirectoryName)\*.dll" "resources\whisper\" -Force -ErrorAction SilentlyContinue
+          # Copy ONLY whisper-cli.exe and its required DLLs. The release zip
+          # ships ~16 example executables (bench, server, stream, llama, etc.)
+          # we don't use; skipping them saves ~50 MB.
+          Copy-Item "$($cli.DirectoryName)\whisper-cli.exe" "resources\whisper\" -Force
+          Copy-Item "$($cli.DirectoryName)\ggml*.dll" "resources\whisper\" -Force -ErrorAction SilentlyContinue
+          Copy-Item "$($cli.DirectoryName)\whisper*.dll" "resources\whisper\" -Force -ErrorAction SilentlyContinue
           Write-Host "Files placed in resources\whisper\:"
           Get-ChildItem "resources\whisper\" | Select-Object Name, Length
 
@@ -172,11 +175,11 @@ jobs:
       - name: Build .exe
         run: npm run package:win
 
-      - name: Upload .exe artifact
+      - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: Powerful-Weapon-Windows
-          path: release/*.exe
+          path: release/*.zip
           retention-days: 30
           if-no-files-found: error
 
@@ -199,5 +202,5 @@ jobs:
         with:
           files: |
             artifacts/Powerful-Weapon-macOS/*.dmg
-            artifacts/Powerful-Weapon-Windows/*.exe
+            artifacts/Powerful-Weapon-Windows/*.zip
           generate_release_notes: true

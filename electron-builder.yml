@@ -26,7 +26,11 @@ asarUnpack:
 
 win:
   target:
-    - target: nsis
+    # NSIS has a 2 GB embedded-payload limit (32-bit mmap) and the Whisper
+    # model alone is 2.9 GB, so a single NSIS .exe installer isn't possible
+    # without splitting the model out. Use the portable zip target instead —
+    # user unzips and runs Powerful Weapon.exe from the unpacked folder.
+    - target: zip
       arch:
         - x64
   icon: resources/icons/icon.png

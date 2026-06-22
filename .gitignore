@@ -7,6 +7,7 @@ data/
 .DS_Store
 .env
 .env.local
+tsconfig.tsbuildinfo
 
 # Whisper — binaries and 3 GB model are too large for git. CI downloads them
 # fresh on each build (see .github/workflows/build.yml).
@@ -18,6 +19,8 @@ resources/whisper/main
 resources/whisper/main.exe
 resources/whisper/*.dll
 resources/whisper/*.dylib
+resources/whisper/whisper-bin-win/
+resources/whisper/whisper-bin-*/
 
 # Tamil Bible — downloaded + compiled by CI from godlytalias repo on each build.
 resources/bible/tamil-ov-source.json

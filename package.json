@@ -15,9 +15,9 @@
     "build": "npm run build:renderer && npm run build:electron",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "postinstall": "electron-builder install-app-deps",
-    "package": "npm run build && electron-builder",
-    "package:win": "npm run build && electron-builder --win",
-    "package:mac": "npm run build && electron-builder --mac",
+    "package": "npm run build && electron-builder --publish never",
+    "package:win": "npm run build && electron-builder --win --publish never",
+    "package:mac": "npm run build && electron-builder --mac --publish never",
     "fix-dev": "rm -rf node_modules/electron && npm install electron --no-save && cd node_modules/electron && node install.js || true",
     "import:bible": "tsx scripts/build-bible-db.ts"
   },

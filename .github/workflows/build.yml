@@ -1,14 +1,16 @@
 name: Build installers
 
-# Runs on:
-#   - Manual click in the GitHub Actions tab ("Run workflow")
-#   - Every push to the main branch
-#   - Every tag like v0.1.0 (those also create a GitHub Release)
 on:
   workflow_dispatch:
   push:
     branches: [main]
     tags: ['v*']
+
+# electron-builder reads GH_TOKEN to decide whether to publish. We never want
+# the build jobs to publish — only the dedicated release job (gated on tags).
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  WHISPER_RELEASE: v1.7.6   # pin so a future whisper.cpp asset rename doesn't break us
 
 jobs:
   # =============================================================
@@ -16,7 +18,7 @@ jobs:
   # =============================================================
   build-mac:
     name: Build macOS .dmg
-    runs-on: macos-14   # Apple Silicon runner (arm64)
+    runs-on: macos-14
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -24,18 +26,17 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install system tools
         run: brew install cmake ffmpeg
 
-      # Cache the 2.9 GB Whisper model so we don't redownload it every run.
       - name: Cache Whisper model
         id: cache-model
         uses: actions/cache@v4
         with:
           path: resources/whisper/ggml-large-v3.bin
-          key: whisper-model-ggml-large-v3
+          key: whisper-model-ggml-large-v3-v1
 
       - name: Download Whisper model (only if not cached)
         if: steps.cache-model.outputs.cache-hit != 'true'
@@ -43,8 +44,8 @@ jobs:
           curl -L --retry 10 --retry-delay 15 -C - \
             -o resources/whisper/ggml-large-v3.bin \
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin"
+          ls -lh resources/whisper/ggml-large-v3.bin
 
-      # Build whisper.cpp from source (small enough that we don't bother caching).
       - name: Build whisper.cpp
         run: |
           cd resources/whisper
@@ -52,11 +53,11 @@ jobs:
           cd whisper.cpp
           cmake -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build -j --config Release --target whisper-cli
+          ls -lh build/bin/whisper-cli
 
       - name: Install npm dependencies
         run: npm install --no-audit --no-fund
 
-      # Pull a public Tamil OV Bible so the .dmg ships with the full Bible loaded.
       - name: Import full Tamil Bible
         run: |
           curl -L -o resources/bible/tamil-ov-source.json \
@@ -72,6 +73,7 @@ jobs:
           name: Powerful-Weapon-macOS
           path: release/*.dmg
           retention-days: 30
+          if-no-files-found: error
 
   # =============================================================
   #  Windows build → .exe
@@ -86,33 +88,74 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
-      # Cache the 2.9 GB Whisper model so we don't redownload it every run.
       - name: Cache Whisper model
         id: cache-model
         uses: actions/cache@v4
         with:
           path: resources/whisper/ggml-large-v3.bin
-          key: whisper-model-ggml-large-v3-windows
+          key: whisper-model-ggml-large-v3-windows-v1
 
       - name: Download Whisper model (only if not cached)
         if: steps.cache-model.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
-          Invoke-WebRequest `
-            -Uri "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin" `
-            -OutFile "resources/whisper/ggml-large-v3.bin"
+          $maxAttempts = 8
+          for ($i = 1; $i -le $maxAttempts; $i++) {
+            try {
+              Write-Host "Attempt $i of $maxAttempts"
+              Invoke-WebRequest `
+                -Uri "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin" `
+                -OutFile "resources/whisper/ggml-large-v3.bin" `
+                -TimeoutSec 600
+              break
+            } catch {
+              Write-Host "Attempt $i failed: $_"
+              if ($i -eq $maxAttempts) { throw }
+              Start-Sleep -Seconds 15
+            }
+          }
+          Get-Item resources/whisper/ggml-large-v3.bin | Format-List Name, Length
 
-      # Get the prebuilt Windows whisper-cli + dlls.
       - name: Download Whisper Windows binary
         shell: pwsh
         run: |
-          $url = "https://github.com/ggerganov/whisper.cpp/releases/latest/download/whisper-bin-x64.zip"
-          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\whisper-win.zip"
+          $version = "${{ env.WHISPER_RELEASE }}"
+          # whisper.cpp Windows assets: try both common names
+          $candidates = @(
+            "https://github.com/ggerganov/whisper.cpp/releases/download/$version/whisper-bin-x64.zip",
+            "https://github.com/ggerganov/whisper.cpp/releases/download/$version/whisper-blas-bin-x64.zip"
+          )
+          $downloaded = $false
+          foreach ($url in $candidates) {
+            Write-Host "Trying: $url"
+            try {
+              Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\whisper-win.zip" -TimeoutSec 120
+              $downloaded = $true
+              Write-Host "Downloaded: $url"
+              break
+            } catch {
+              Write-Host "Not found: $url"
+            }
+          }
+          if (-not $downloaded) { throw "Could not download any Whisper Windows binary for $version" }
           Expand-Archive -Path "$env:RUNNER_TEMP\whisper-win.zip" -DestinationPath "$env:RUNNER_TEMP\whisper-win"
-          # Place binary + dlls flat under resources/whisper/ so paths.ts's flat-layout lookup finds them
-          Copy-Item -Path "$env:RUNNER_TEMP\whisper-win\*" -Destination "resources\whisper\" -Recurse -Force
+          # Some zips put binaries in a subfolder, some at the root — handle both.
+          $cli = Get-ChildItem -Path "$env:RUNNER_TEMP\whisper-win" -Recurse -Filter "whisper-cli.exe" | Select-Object -First 1
+          if (-not $cli) {
+            # Older releases ship as main.exe; rename for compatibility
+            $cli = Get-ChildItem -Path "$env:RUNNER_TEMP\whisper-win" -Recurse -Filter "main.exe" | Select-Object -First 1
+            if ($cli) {
+              Copy-Item $cli.FullName "$($cli.DirectoryName)\whisper-cli.exe"
+              $cli = Get-Item "$($cli.DirectoryName)\whisper-cli.exe"
+            }
+          }
+          if (-not $cli) { throw "No whisper-cli.exe or main.exe found in the downloaded zip" }
+          # Copy whisper-cli.exe + all DLLs into resources/whisper/ (flat layout)
+          Copy-Item "$($cli.DirectoryName)\*.exe" "resources\whisper\" -Force
+          Copy-Item "$($cli.DirectoryName)\*.dll" "resources\whisper\" -Force -ErrorAction SilentlyContinue
+          Write-Host "Files placed in resources\whisper\:"
           Get-ChildItem "resources\whisper\" | Select-Object Name, Length
 
       - name: Install npm dependencies
@@ -135,6 +178,7 @@ jobs:
           name: Powerful-Weapon-Windows
           path: release/*.exe
           retention-days: 30
+          if-no-files-found: error
 
   # =============================================================
   #  Release step (only fires when you push a tag like v0.1.0)

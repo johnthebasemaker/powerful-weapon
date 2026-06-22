@@ -2,7 +2,7 @@
 
 ## User Manual
 
-**Version 0.1.0 · For weekly Tamil Bible study groups**
+**Version 0.1.1 · For weekly Tamil Bible study groups**
 
 ---
 
@@ -27,19 +27,23 @@ You need **one** of these two computers:
 
 And:
 
-- An **internet connection** (only needed to download the app once and to send WhatsApp messages)
-- **WhatsApp Web** working in your browser (visit web.whatsapp.com once and scan the QR code from your phone)
-- About **5 GB of free disk space** (most of it is the Tamil speech-recognition engine, which is included)
+- An **internet connection** — needed to download the app (one-time), set up speech-to-text (one-time, ~3 GB), and send WhatsApp messages day-to-day.
+- **WhatsApp Web** working in your browser (visit web.whatsapp.com once and scan the QR code from your phone).
+- About **5 GB of free disk space** total:
+  - ~200 MB for the app itself.
+  - ~3 GB for the Tamil speech-to-text engine that's downloaded the first time you open the app.
 
 ---
 
 ## Part 1 — Installing the app
 
+The app is small (~200 MB). When you open it the first time, it'll offer to download the bigger Tamil speech-to-text engine (~3 GB) — but that's a *second* step, covered in Part 2. Install the app first.
+
 ### On a Mac
 
-> **Download:** _[PASTE DOWNLOAD LINK HERE]_
+> **Download:** https://github.com/johnthebasemaker/powerful-weapon/releases/download/v0.1.1/Powerful.Weapon-0.1.0.dmg
 
-1. Download the file `Powerful Weapon-0.1.0-arm64.dmg` (or `Powerful Weapon-0.1.0.dmg` if you have an older Intel-based Mac).
+1. Download the file `Powerful Weapon-0.1.1-arm64.dmg` (or `Powerful Weapon-0.1.1.dmg` if you have an older Intel-based Mac — about 200 MB).
 2. Double-click the `.dmg` file. A small window opens showing the **Powerful Weapon** icon next to an **Applications** folder.
 3. **Drag the Powerful Weapon icon onto the Applications folder.** This installs the app.
 4. Open Finder → Applications → double-click **Powerful Weapon**.
@@ -64,15 +68,17 @@ This is normal — it happens because the app was built for you personally and n
 
 ### On a Windows PC
 
-> **Download:** (https://github.com/johnthebasemaker/powerful-weapon/actions/runs/27950557358/artifacts/7791566374)
+> **Download:** (https://github.com/johnthebasemaker/powerful-weapon/releases/download/v0.1.1/Powerful.Weapon.Setup.0.1.0.exe)
 
-1. Download the file `Powerful Weapon-0.1.0-win.zip`.
-2. Find the downloaded zip in your Downloads folder.
-3. **Right-click** the zip → **Extract All...** → choose a folder you'll remember (for example, `C:\Powerful Weapon`).
-4. Open the folder you extracted to. You'll see a file called **Powerful Weapon.exe**.
-5. **Double-click Powerful Weapon.exe** to open the app.
+1. Download the file `Powerful Weapon Setup 0.1.1.exe` (about 150 MB).
+2. Find it in your Downloads folder and **double-click it**.
+3. The installer wizard opens. Click through it:
+   - Choose where to install (the default location is fine — just click Next).
+   - Click **Install**.
+   - When it finishes, leave **Run Powerful Weapon** checked and click **Finish**.
+4. The app opens. A **Powerful Weapon** icon also appears on your Desktop and in the Start Menu.
 
-**The first time you open it**, Windows shows this warning:
+**The first time you open it**, Windows may show this warning:
 
 > Windows protected your PC. Microsoft Defender SmartScreen prevented an unrecognized app from starting.
 
@@ -81,13 +87,46 @@ This is normal — it happens because the app was built for you personally. To f
 1. Click **More info**.
 2. Click **Run anyway**.
 
-**You only do this once.** After this, double-clicking opens the app immediately.
+**You only do this once.** From now on, opening the app is one click — either from the Desktop shortcut or from the Start Menu.
 
-**Recommended:** right-click `Powerful Weapon.exe` → **Send to → Desktop (create shortcut)**. Now you can open the app from your Desktop with one click forever.
+To uninstall later: Windows Settings → Apps → Powerful Weapon → Uninstall.
 
 ---
 
-## Part 2 — A tour of the app
+## Part 2 — Setting up speech-to-text (one-time, ~3 GB download)
+
+When you open the app for the first time, voice-note grading isn't ready yet because the speech-to-text engine (called Whisper) hasn't been downloaded. The app still works for everything else — picking verses, sending daily WhatsApp messages, managing users — but **grading voice notes needs Whisper**.
+
+### Why download separately?
+
+Bundling 3 GB into the installer would make it slow and hard to share. Instead, the app fetches Whisper once on first run and keeps it on your computer forever after. The download is **safe** (comes from Hugging Face, a trusted open-source AI repository) and you only do it once.
+
+### How to do it
+
+1. Open the app.
+2. On the **Dashboard**, you'll see a purple card that says:
+   > 🎙️ **Set up speech-to-text** — Voice-note grading needs a one-time 3 GB download.
+3. Click **Set up now →** in that card. (Or go to **Settings** → scroll to **Speech-to-Text (Whisper)**.)
+4. Click the big **Download model (~3 GB)** button.
+5. A progress bar appears showing how much has been downloaded.
+6. **Wait.** This typically takes 15–45 minutes depending on your internet speed.
+7. When it finishes, the Settings page shows ✅ **Whisper is set up and ready**. You're done.
+
+### If the download stops or fails
+
+- **Internet dropped halfway?** No problem. Click the button again — it will say **Resume download** and pick up exactly where it stopped.
+- **Cancelled by mistake?** Same — click Download to start, or Resume to continue.
+- **Want to start over?** Click **Start over** to delete the partial file and begin from zero.
+
+### After Whisper is set up
+
+The app is fully functional. You don't need internet to grade voice notes — they're processed entirely on your computer. (You still need internet to send WhatsApp messages, of course.)
+
+If you ever want to free up the 3 GB, go to Settings → Speech-to-Text → **Delete model**. You can always re-download it later.
+
+---
+
+## Part 3 — A tour of the app
 
 When you open Powerful Weapon, you'll see a sidebar on the left with six tabs, and a main area on the right that changes based on which tab is selected.
 
@@ -112,7 +151,7 @@ This is the home screen. It shows you everything important at a glance.
 
 - **Bible verses** — how many verses are loaded (should be around 31,000 once the full Tamil Bible is loaded).
 - **This week's selections** — how many of the 7 daily verses you've picked. Goes from 0/7 to 7/7.
-- **Whisper STT** — whether the speech-to-text engine is ready. Should say "Ready".
+- **Whisper STT** — whether the speech-to-text engine is ready. Says "Ready" once you've downloaded it (see Part 2). Until then, a purple "Set up speech-to-text" card appears here with a one-click button.
 
 **Below that**, if there's a message waiting to be sent (because the scheduled time arrived), you'll see an **amber-coloured banner** showing the verse. Two buttons next to it:
 
@@ -275,7 +314,10 @@ Set up once, rarely change.
 > ⚠️ **Strongly recommended:** turn on auto-backup. The database file contains your entire year of work. If your computer ever crashes, the backup folder is your only way to get it back.
 
 **Speech-to-Text (Whisper)**
-- Shows whether Whisper is set up. If it says **✅ Ready**, you're good. If it says something else, the auto-grading won't work — voice notes can still be imported but you'll have to grade them manually.
+- Shows whether Whisper is set up. If it says **✅ Whisper is set up and ready**, you're good.
+- If it says ⚠️ not installed, you'll see a big **Download model (~3 GB)** button. Click it — see Part 2 for details.
+- If a previous download stopped partway, you'll see a **Resume download** button that picks up where it left off.
+- Once installed, you can **Delete model** here if you ever need to free up 3 GB of disk space. You can always re-download it.
 
 **Bible database**
 - Shows how many verses are loaded. Should be around 31,000.
@@ -284,7 +326,7 @@ After changing settings, click **Apply schedule** at the bottom to save.
 
 ---
 
-## Part 3 — The weekly rhythm
+## Part 4 — The weekly rhythm
 
 Here's what a typical week looks like:
 
@@ -327,7 +369,7 @@ Go to **Leaderboards** to see how everyone is doing. Export to CSV at the end of
 
 ---
 
-## Part 4 — Tips and recommendations
+## Part 5 — Tips and recommendations
 
 **Pick verses with related words.** The fuzzy search looks for word variations automatically. If you search `அன்பு` (love), you'll get verses with `அன்புகூருங்கள்`, `அன்பானவர்`, etc. all ranked.
 
@@ -341,7 +383,7 @@ Go to **Leaderboards** to see how everyone is doing. Export to CSV at the end of
 
 ---
 
-## Part 5 — Troubleshooting
+## Part 6 — Troubleshooting
 
 **The app doesn't open after I double-click.**
 On macOS first launch only: see *Part 1 → On a Mac → first launch* above. On Windows: see *Part 1 → On a Windows PC → first launch*.
@@ -355,8 +397,11 @@ You haven't picked all 7 verses for the week yet. Go to Verse Picker, pick 7, sa
 **Voice grading is very slow.**
 Normal — Whisper takes 30–90 seconds for each minute of audio. The first voice note of the day is sometimes slower because the engine "warms up". Just be patient.
 
-**Whisper isn't installed.**
-Open Settings → if the Whisper section shows ⚠️, the speech engine wasn't installed properly. The app will still let you import voice notes, just without auto-grading.
+**Whisper isn't installed (or download failed partway).**
+Open Settings → scroll to **Speech-to-Text (Whisper)**. Click **Download model** (or **Resume download** if it shows the partial size). The app will still let you import voice notes in the meantime, just without auto-grading. See Part 2 for full details.
+
+**The model download is stuck or very slow.**
+Hugging Face speeds vary by location. Click **Cancel**, wait a minute, then click **Resume download** — you'll pick up from wherever you stopped, no need to restart from zero. If your connection is genuinely slow, leave the app open overnight; resume handles dropped connections automatically.
 
 **Bible verses count is too low.**
 The full Bible should be loaded (~31,000 verses). If you see only 17, the app is using sample data only. This shouldn't happen with a properly built version.
@@ -369,7 +414,7 @@ First, don't panic. Look at your backup folder (Settings → Backup folder). Ins
 ## Frequently asked questions
 
 **Q: Does it work without internet?**
-Yes, for everything except actually sending WhatsApp messages. The Tamil Bible, the verse picker, and the speech-to-text engine all run offline on your computer.
+After the first-time setup, yes — for everything except sending WhatsApp messages. The Tamil Bible, verse picker, and speech-to-text all run offline. *Internet is needed for*: (1) the initial app download, (2) the one-time 3 GB speech-to-text model download on first launch, (3) sending WhatsApp messages day-to-day.
 
 **Q: Can I use a different Bible translation?**
 The app ships with the Tamil Old Version (1956). If you have another translation as JSON, you can import it — ask Andrew.

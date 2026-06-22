@@ -89,6 +89,10 @@ const api = {
   // Whisper
   whisper: {
     check: () => ipcRenderer.invoke('whisper:check'),
+    modelStatus: () => ipcRenderer.invoke('whisper:modelStatus'),
+    downloadModel: () => ipcRenderer.invoke('whisper:downloadModel'),
+    cancelDownload: () => ipcRenderer.invoke('whisper:cancelDownload'),
+    deleteModel: () => ipcRenderer.invoke('whisper:deleteModel'),
     transcribe: (filePath: string) => ipcRenderer.invoke('whisper:transcribe', { filePath }),
     transcribeAndGrade: (payload: any) => ipcRenderer.invoke('whisper:transcribeAndGrade', payload),
     transcribeAndGradeWeek: (payload: { userId: number; filePath: string; weekStart: string }) =>
@@ -110,7 +114,7 @@ const api = {
 
   // Event listeners (renderer subscribes)
   on: (channel: string, listener: (...args: any[]) => void) => {
-    const allowed = ['scheduler:fire', 'whatsapp:fire', 'whisper:progress'];
+    const allowed = ['scheduler:fire', 'whatsapp:fire', 'whisper:progress', 'whisper:download-progress'];
     if (!allowed.includes(channel)) return () => {};
     const sub = (_e: any, ...args: any[]) => listener(...args);
     ipcRenderer.on(channel, sub);

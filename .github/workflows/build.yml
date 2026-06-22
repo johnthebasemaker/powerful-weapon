@@ -31,20 +31,9 @@ jobs:
       - name: Install system tools
         run: brew install cmake ffmpeg
 
-      - name: Cache Whisper model
-        id: cache-model
-        uses: actions/cache@v4
-        with:
-          path: resources/whisper/ggml-large-v3.bin
-          key: whisper-model-ggml-large-v3-v1
-
-      - name: Download Whisper model (only if not cached)
-        if: steps.cache-model.outputs.cache-hit != 'true'
-        run: |
-          curl -L --retry 10 --retry-delay 15 -C - \
-            -o resources/whisper/ggml-large-v3.bin \
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin"
-          ls -lh resources/whisper/ggml-large-v3.bin
+      # Note: the 3 GB Whisper model is NOT bundled in the installer. The app
+      # downloads it on first launch (lands in the user's userData folder).
+      # This keeps the .dmg under GitHub Releases' 2 GB per-asset cap.
 
       - name: Build whisper.cpp
         run: |
@@ -90,33 +79,8 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Cache Whisper model
-        id: cache-model
-        uses: actions/cache@v4
-        with:
-          path: resources/whisper/ggml-large-v3.bin
-          key: whisper-model-ggml-large-v3-windows-v1
-
-      - name: Download Whisper model (only if not cached)
-        if: steps.cache-model.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          $maxAttempts = 8
-          for ($i = 1; $i -le $maxAttempts; $i++) {
-            try {
-              Write-Host "Attempt $i of $maxAttempts"
-              Invoke-WebRequest `
-                -Uri "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin" `
-                -OutFile "resources/whisper/ggml-large-v3.bin" `
-                -TimeoutSec 600
-              break
-            } catch {
-              Write-Host "Attempt $i failed: $_"
-              if ($i -eq $maxAttempts) { throw }
-              Start-Sleep -Seconds 15
-            }
-          }
-          Get-Item resources/whisper/ggml-large-v3.bin | Format-List Name, Length
+      # Note: the 3 GB Whisper model is NOT bundled. The app downloads it
+      # on first launch into the user's %APPDATA% folder.
 
       - name: Download Whisper Windows binary
         shell: pwsh
@@ -179,7 +143,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Powerful-Weapon-Windows
-          path: release/*.zip
+          path: release/*.exe
           retention-days: 30
           if-no-files-found: error
 
@@ -202,5 +166,5 @@ jobs:
         with:
           files: |
             artifacts/Powerful-Weapon-macOS/*.dmg
-            artifacts/Powerful-Weapon-Windows/*.zip
+            artifacts/Powerful-Weapon-Windows/*.exe
           generate_release_notes: true

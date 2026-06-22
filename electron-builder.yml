@@ -19,6 +19,11 @@ extraResources:
     to: whisper
     filter:
       - "**/*"
+      # The 3 GB Whisper model is downloaded by the app on first launch
+      # (lands in userData/whisper/). Keeping it out of the installer drops
+      # the .dmg from 2.9 GB → ~200 MB and the .zip to similar, both of
+      # which fit comfortably inside GitHub Releases' 2 GB per-asset cap.
+      - "!ggml-*.bin"
 
 asarUnpack:
   - "**/better-sqlite3/**/*"
@@ -26,11 +31,10 @@ asarUnpack:
 
 win:
   target:
-    # NSIS has a 2 GB embedded-payload limit (32-bit mmap) and the Whisper
-    # model alone is 2.9 GB, so a single NSIS .exe installer isn't possible
-    # without splitting the model out. Use the portable zip target instead —
-    # user unzips and runs Powerful Weapon.exe from the unpacked folder.
-    - target: zip
+    # With the Whisper model no longer bundled (downloaded on first launch),
+    # the installer payload is well under NSIS's 2 GB mmap limit — so we
+    # ship a real one-click installer with Start Menu + Desktop shortcuts.
+    - target: nsis
       arch:
         - x64
   icon: resources/icons/icon.png

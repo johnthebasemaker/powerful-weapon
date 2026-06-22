@@ -129,21 +129,12 @@ export default function SettingsPage() {
       </section>
 
       {/* Speech-to-Text */}
-      <section className="bg-white rounded-xl border border-gray-200 p-5">
-        <h2 className="font-medium mb-4">Speech-to-Text (Whisper)</h2>
-        {whisper?.ok ? (
-          <div className="text-sm text-emerald-700">✅ Whisper is set up and ready.</div>
-        ) : (
-          <div className="text-sm space-y-2">
-            <div className="text-amber-700">⚠️ Whisper isn't installed yet.</div>
-            {whisper?.reason && <code className="block text-xs bg-gray-50 border border-gray-200 rounded p-2">{whisper.reason}</code>}
-            <p className="text-gray-600">
-              Follow the steps in <code>README.md → First-time setup → Whisper</code> to download the binary and Tamil model.
-              Until then, voice notes can be imported but won't be auto-graded.
-            </p>
-          </div>
-        )}
-      </section>
+      <WhisperSection
+        whisperOk={whisper?.ok ?? false}
+        whisperReason={whisper?.reason}
+        onChange={load}
+      />
+
 
       {/* Bible data */}
       <section className="bg-white rounded-xl border border-gray-200 p-5">
@@ -173,5 +164,159 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
       {children}
       {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
     </div>
+  );
+}
+
+interface ModelStatus {
+  installed: boolean;
+  partial: boolean;
+  bytes: number;
+  expectedBytes: number;
+  location: string;
+}
+
+interface DownloadProgress {
+  stage: 'connecting' | 'downloading' | 'done' | 'cancelled' | 'error';
+  bytes?: number;
+  total?: number;
+  percent?: number;
+  error?: string;
+}
+
+function formatBytes(b: number): string {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
+  return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function WhisperSection({ whisperOk, whisperReason, onChange }: {
+  whisperOk: boolean; whisperReason?: string; onChange: () => void;
+}) {
+  const [status, setStatus] = useState<ModelStatus | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [progress, setProgress] = useState<DownloadProgress | null>(null);
+
+  async function refresh() {
+    const s = (await window.api.whisper.modelStatus()) as ModelStatus;
+    setStatus(s);
+  }
+
+  useEffect(() => {
+    refresh();
+    const off = window.api.on('whisper:download-progress', (p: DownloadProgress) => {
+      setProgress(p);
+      if (p.stage === 'done' || p.stage === 'error' || p.stage === 'cancelled') {
+        setDownloading(false);
+        refresh();
+        if (p.stage === 'done') onChange();
+      }
+    });
+    return () => off();
+  }, []);
+
+  async function startDownload() {
+    setDownloading(true);
+    setProgress({ stage: 'connecting' });
+    const r = await window.api.whisper.downloadModel();
+    setDownloading(false);
+    if (!r.ok && r.error !== 'Cancelled') {
+      alert(`Download failed: ${r.error}`);
+    }
+    refresh();
+    onChange();
+  }
+
+  async function cancel() {
+    await window.api.whisper.cancelDownload();
+  }
+
+  async function remove() {
+    if (!confirm('Delete the downloaded Whisper model? You can re-download it later, but it\'s a 3 GB transfer.')) return;
+    await window.api.whisper.deleteModel();
+    refresh();
+    onChange();
+  }
+
+  const pct = progress?.percent ?? (progress?.bytes && progress?.total
+    ? (progress.bytes / progress.total) * 100 : 0);
+
+  return (
+    <section className="bg-white rounded-xl border border-gray-200 p-5">
+      <h2 className="font-medium mb-4">Speech-to-Text (Whisper)</h2>
+
+      {whisperOk ? (
+        <div className="space-y-3">
+          <div className="text-sm text-emerald-700">✅ Whisper is set up and ready.</div>
+          {status?.installed && (
+            <div className="text-xs text-gray-500 space-y-0.5">
+              <div>Size: <strong>{formatBytes(status.bytes)}</strong></div>
+              <div>Location: <code className="text-xs">{status.location}</code></div>
+            </div>
+          )}
+          <button onClick={remove} className="text-xs text-red-600 hover:underline">
+            Delete model (frees ~3 GB)
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-sm space-y-1">
+            <div className="text-amber-900">
+              ⚠️ <strong>Speech-to-text engine not installed.</strong>
+            </div>
+            <p className="text-amber-800">
+              Voice notes can be imported but won't be auto-graded until you download the model. It's a one-time ~3 GB download from Hugging Face. Lives in your user data folder so app updates won't wipe it.
+            </p>
+            {whisperReason && (
+              <code className="block text-xs bg-white border border-amber-200 rounded p-1.5 mt-1 break-all">
+                {whisperReason}
+              </code>
+            )}
+          </div>
+
+          {!downloading && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={startDownload}
+                className="px-4 py-2 bg-brand-500 text-white text-sm rounded-md hover:bg-brand-600"
+              >
+                {status?.partial ? `Resume download (${formatBytes(status.bytes)} / ${formatBytes(status.expectedBytes)})` : 'Download model (~3 GB)'}
+              </button>
+              {status?.partial && (
+                <button onClick={remove} className="text-xs text-gray-600 hover:underline">
+                  Start over
+                </button>
+              )}
+            </div>
+          )}
+
+          {downloading && progress && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-700">
+                  {progress.stage === 'connecting' && 'Connecting to Hugging Face…'}
+                  {progress.stage === 'downloading' && 'Downloading model…'}
+                  {progress.stage === 'error' && `Error: ${progress.error}`}
+                </span>
+                <span className="text-gray-500 text-xs tabular-nums">
+                  {progress.bytes !== undefined && progress.total !== undefined
+                    ? `${formatBytes(progress.bytes)} / ${formatBytes(progress.total)}`
+                    : ''}
+                </span>
+              </div>
+              <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-brand-500 transition-all"
+                  style={{ width: `${Math.max(2, Math.min(100, pct))}%` }}
+                />
+              </div>
+              <button onClick={cancel} className="text-xs text-red-600 hover:underline">
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

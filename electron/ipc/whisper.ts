@@ -1,9 +1,13 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
-import { whisperBinaryPath, whisperModelPath, voiceNotesDir } from '../lib/paths';
+import {
+  whisperBinaryPath, whisperModelPath, voiceNotesDir,
+  modelStatus, MODEL_URL, MODEL_SIZE_BYTES, MODEL_FILENAME, userDataWhisperDir,
+} from '../lib/paths';
 import { grade, GradingInput } from '../lib/grading';
 import { getDb } from '../lib/database';
 
@@ -29,10 +33,163 @@ export interface TranscribeResult {
 
 function isModelReady(): { ok: boolean; reason?: string } {
   const bin = whisperBinaryPath();
-  const model = whisperModelPath();
   if (!fs.existsSync(bin)) return { ok: false, reason: `Whisper binary missing: ${bin}` };
-  if (!fs.existsSync(model)) return { ok: false, reason: `Whisper model missing: ${model}` };
+  const status = modelStatus();
+  if (!status.installed) {
+    if (status.partial) {
+      return { ok: false, reason: `Whisper model download incomplete (${formatBytes(status.bytes)} / ${formatBytes(status.expectedBytes)}). Resume from Settings.` };
+    }
+    return { ok: false, reason: 'Whisper model not downloaded yet. Set up from Settings → Speech-to-Text.' };
+  }
   return { ok: true };
+}
+
+function formatBytes(b: number): string {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
+  return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+// ---------------- Model downloader ----------------
+
+interface DownloadHandle {
+  abort: () => void;
+}
+
+let activeDownload: DownloadHandle | null = null;
+
+function followRedirect(url: string, headers: Record<string, string>, depth = 0): Promise<{ res: import('http').IncomingMessage; finalUrl: string }> {
+  return new Promise((resolve, reject) => {
+    if (depth > 8) return reject(new Error('Too many redirects'));
+    const req = https.get(url, { headers }, (res) => {
+      const sc = res.statusCode ?? 0;
+      if (sc >= 300 && sc < 400 && res.headers.location) {
+        res.resume();
+        followRedirect(res.headers.location, headers, depth + 1).then(resolve, reject);
+        return;
+      }
+      if (sc !== 200 && sc !== 206) {
+        res.resume();
+        return reject(new Error(`HTTP ${sc} from ${url}`));
+      }
+      resolve({ res, finalUrl: url });
+    });
+    req.on('error', reject);
+    req.setTimeout(60_000, () => req.destroy(new Error('Connect timeout')));
+  });
+}
+
+function downloadModel(): Promise<{ ok: true } | { ok: false; error: string }> {
+  return new Promise(async (resolve) => {
+    if (activeDownload) {
+      return resolve({ ok: false, error: 'A download is already in progress.' });
+    }
+
+    const win = () => BrowserWindow.getAllWindows()[0];
+    const send = (payload: any) => win()?.webContents.send('whisper:download-progress', payload);
+
+    const dir = userDataWhisperDir();
+    const dest = path.join(dir, MODEL_FILENAME);
+    const tmp = dest + '.part';
+
+    // Resume support: if a .part file exists, request the byte range past it.
+    let resumeFrom = 0;
+    if (fs.existsSync(tmp)) {
+      resumeFrom = fs.statSync(tmp).size;
+      if (resumeFrom >= MODEL_SIZE_BYTES) {
+        // Already complete from a prior run — just finalize.
+        fs.renameSync(tmp, dest);
+        return resolve({ ok: true });
+      }
+    }
+
+    const headers: Record<string, string> = { 'User-Agent': 'Powerful-Weapon/0.1.0' };
+    if (resumeFrom > 0) headers.Range = `bytes=${resumeFrom}-`;
+
+    let aborted = false;
+    activeDownload = {
+      abort: () => {
+        aborted = true;
+      },
+    };
+
+    try {
+      send({ stage: 'connecting', bytes: resumeFrom, total: MODEL_SIZE_BYTES });
+      const { res } = await followRedirect(MODEL_URL, headers);
+
+      const total = (() => {
+        const cl = parseInt(String(res.headers['content-length'] ?? '0'), 10);
+        const cr = String(res.headers['content-range'] ?? '');
+        const m = cr.match(/\/(\d+)$/);
+        if (m) return parseInt(m[1], 10);
+        return cl + resumeFrom;
+      })();
+
+      const out = fs.createWriteStream(tmp, { flags: resumeFrom > 0 ? 'a' : 'w' });
+      let received = resumeFrom;
+      let lastEmit = 0;
+
+      res.on('data', (chunk: Buffer) => {
+        if (aborted) {
+          res.destroy();
+          out.destroy();
+          return;
+        }
+        received += chunk.length;
+        const now = Date.now();
+        if (now - lastEmit > 250 || received === total) {
+          lastEmit = now;
+          send({
+            stage: 'downloading',
+            bytes: received,
+            total,
+            percent: total ? Math.round((received / total) * 1000) / 10 : 0,
+          });
+        }
+      });
+
+      res.pipe(out);
+
+      out.on('close', () => {
+        activeDownload = null;
+        if (aborted) {
+          send({ stage: 'cancelled', bytes: received, total });
+          return resolve({ ok: false, error: 'Cancelled' });
+        }
+        // Final size check — within 1% of expected
+        if (received < MODEL_SIZE_BYTES * 0.99) {
+          send({ stage: 'error', bytes: received, total, error: 'Download incomplete' });
+          return resolve({ ok: false, error: `Download incomplete: ${formatBytes(received)} of ${formatBytes(MODEL_SIZE_BYTES)}` });
+        }
+        try {
+          fs.renameSync(tmp, dest);
+        } catch (e: any) {
+          send({ stage: 'error', error: `Could not finalize: ${e.message}` });
+          return resolve({ ok: false, error: `Could not finalize file: ${e.message}` });
+        }
+        send({ stage: 'done', bytes: received, total });
+        resolve({ ok: true });
+      });
+
+      out.on('error', (err) => {
+        activeDownload = null;
+        send({ stage: 'error', error: err.message });
+        resolve({ ok: false, error: err.message });
+      });
+
+      res.on('error', (err) => {
+        activeDownload = null;
+        out.destroy();
+        send({ stage: 'error', error: err.message });
+        resolve({ ok: false, error: err.message });
+      });
+    } catch (e: any) {
+      activeDownload = null;
+      send({ stage: 'error', error: e.message });
+      resolve({ ok: false, error: e.message });
+    }
+  });
 }
 
 function probeDurationSeconds(filePath: string): Promise<number> {
@@ -151,6 +308,31 @@ function runWhisper(filePath: string, language = 'ta'): Promise<TranscribeResult
 
 export function registerWhisperIpc() {
   ipcMain.handle('whisper:check', () => isModelReady());
+
+  ipcMain.handle('whisper:modelStatus', () => modelStatus());
+
+  ipcMain.handle('whisper:downloadModel', () => downloadModel());
+
+  ipcMain.handle('whisper:cancelDownload', () => {
+    if (activeDownload) {
+      activeDownload.abort();
+      return { ok: true };
+    }
+    return { ok: false, error: 'No download in progress' };
+  });
+
+  ipcMain.handle('whisper:deleteModel', () => {
+    const dest = path.join(userDataWhisperDir(), MODEL_FILENAME);
+    const tmp = dest + '.part';
+    let deleted = 0;
+    for (const p of [dest, tmp]) {
+      if (fs.existsSync(p)) {
+        fs.unlinkSync(p);
+        deleted++;
+      }
+    }
+    return { ok: true, deleted };
+  });
 
   ipcMain.handle('whisper:transcribe', async (_e, opts: TranscribeOptions) => {
     const ready = isModelReady();

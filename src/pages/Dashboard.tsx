@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { currentWeekStart, dateForSlot, weekdayLabel } from '../lib/dates';
 import type { Selection } from '../types';
 
@@ -75,8 +76,27 @@ export default function Dashboard() {
       <div className="grid grid-cols-3 gap-4">
         <Card title="Bible verses" value={verseCount.toLocaleString()} hint={verseCount < 1000 ? 'Sample only — import full Tamil OV' : 'Full Bible loaded'} />
         <Card title="This week's selections" value={`${selections.length} / 7`} hint={selections.length < 7 ? 'Go to Verse Picker' : 'Ready'} />
-        <Card title="Whisper STT" value={whisper?.ok ? 'Ready' : 'Not installed'} hint={whisper?.ok ? 'Model loaded' : 'See README → setup'} />
+        <Card title="Whisper STT" value={whisper?.ok ? 'Ready' : 'Not installed'} hint={whisper?.ok ? 'Model loaded' : 'Set up in Settings'} />
       </div>
+
+      {/* First-launch Whisper setup nudge */}
+      {!whisper?.ok && (
+        <section className="bg-brand-50 border border-brand-100 rounded-xl p-4 flex items-start gap-4">
+          <div className="text-3xl">🎙️</div>
+          <div className="flex-1">
+            <h2 className="font-semibold text-brand-700 mb-1">Set up speech-to-text</h2>
+            <p className="text-sm text-gray-700">
+              Voice-note grading needs a one-time 3 GB download. The rest of the app works without it — pick verses and send daily WhatsApp messages anytime.
+            </p>
+          </div>
+          <Link
+            to="/settings"
+            className="px-3 py-2 bg-brand-500 text-white text-sm rounded-md hover:bg-brand-600 whitespace-nowrap"
+          >
+            Set up now →
+          </Link>
+        </section>
+      )}
 
       {/* Pending / queued sends */}
       {pending.length > 0 && (

@@ -159,11 +159,13 @@ Powerful Weapon/
 ### Local builds
 
 ```bash
-npm run package:mac    # → release/Powerful Weapon-0.1.0-arm64.dmg (~200 MB)
-npm run package:win    # → release/Powerful Weapon Setup 0.1.0.exe (~150 MB)
+npm run package:mac    # → release/Powerful Weapon-0.1.1-arm64.dmg (~123 MB) + .dmg (~127 MB, Intel)
+npm run package:win    # → release/Powerful Weapon Setup 0.1.1.exe (~84 MB)
 ```
 
 Installers are small because the **3 GB Whisper model is not bundled** — the app downloads it on first launch (into the user's `userData` folder).
+
+Latest release: <https://github.com/johnthebasemaker/powerful-weapon/releases/latest>
 
 Mac builds need Apple Silicon native deps. Windows builds *cross-compile* from Mac via Wine — flaky, not recommended. Use CI instead.
 

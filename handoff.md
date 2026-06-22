@@ -271,15 +271,19 @@ Cache key for the model: `whisper-model-ggml-large-v3[-windows]-v1`. Bump the ve
 
 ### Open work (not done, ranked by value)
 
-1. **App icon** (low effort, visible polish). Drop a 1024×1024 `icon.png` into `resources/icons/` and re-build. Both Mac and Windows builds will pick it up automatically.
+1. **App icon** (low effort, big visible polish). Drop a 1024×1024 `icon.png` into `resources/icons/` and bump the version + re-release. Both Mac and Windows installers will pick it up automatically. Currently using the default Electron icon.
 
-2. **Tag a fresh release after the first-launch-download change lands** (5 min). `git tag v0.1.1 && git push origin v0.1.1`. CI's `release` job will create a permanent download page. Installers will be ~200 MB each — well under the 2 GB cap.
+2. **Real-world test with Andrew's friend** (highest learning value). Send her v0.1.1 + PDF manual, watch her first launch experience. Likely to surface: confusion about the model download wait time, unclear copy somewhere, browser-vs-app paste flow. Iterate from her feedback.
 
-3. **Real download links in the user manual** (immediate next step after #2). Replace `[PASTE DOWNLOAD LINK HERE]` in `usermanual.md` with actual GitHub Release URLs, then re-run `python3 make_manual_pdf.py`.
+3. **Screenshots in usermanual.md** (medium effort, high friend-friendliness). The current PDF describes UI in words. Each tab walkthrough would be ~10× clearer with a screenshot. Capture clean screenshots of each of the 6 tabs (with realistic data filled in), drop into `resources/manual/`, reference via `![Dashboard](resources/manual/dashboard.png)` in `usermanual.md`. May need to update `make_manual_pdf.py` to copy images alongside or inline as base64.
 
-4. **Replace placeholders for screenshots in usermanual.md** (medium effort). The current PDF describes UI in text. Adding screenshots would make it easier for the friend. Take screenshots, add them to `resources/manual/`, reference from the markdown.
+4. **WhatsApp group selector / nicer "open WhatsApp" UX** (medium effort, friend-asked). Currently the "Copy + Open WhatsApp" flow opens web.whatsapp.com — she still has to click the group manually. Could store the group name + try to focus that thread automatically via a small Puppeteer/playwright helper, but adds dependencies. Worth waiting until she actually asks for it.
 
-5. **Code signing** (cost: $99/yr Apple + ~$200/yr Windows). Would remove the one-time security warnings. Out of scope for personal-gift project.
+5. **Better Whisper Tamil model** (low priority, hard). Quality cap at ~90% accuracy is from Whisper's per-character errors. Could swap to AI4Bharat IndicConformer for ~95% — but native bindings are Python-only; would need a sidecar process. Defer unless she explicitly complains about grading quality.
+
+6. **Code signing** (cost: $99/yr Apple + ~$200/yr Windows). Would remove the one-time security warnings. Out of scope for personal-gift project unless distribution scales beyond one friend.
+
+7. **Auto-update on new releases** (low priority). electron-updater could check the GitHub Releases page on launch. Currently every new version requires manual re-install. Useful once there are 2+ users.
 
 ---
 
@@ -346,9 +350,13 @@ If any step fails, check `electron/ipc/*.ts` corresponding handler and the rende
 
 - Repo: `https://github.com/johnthebasemaker/powerful-weapon` (johnthebasemaker is Andrew's GitHub username).
 - Branch: `main`.
-- Commits so far: initial commit + CI fixes + Windows .zip switch + this doc batch.
-- CI: builds Mac DMG + Windows zip on every push. Latest run as of writing: Mac green, Windows green (after the NSIS → zip switch).
-- No tags pushed yet. `v0.1.0` tag would trigger a GitHub Release.
+- **Latest release: v0.1.1** — published as a GitHub Release with 3 installer assets:
+  - `Powerful.Weapon-0.1.1-arm64.dmg` (123 MB, Apple Silicon)
+  - `Powerful.Weapon-0.1.1.dmg` (127 MB, Intel Mac)
+  - `Powerful.Weapon.Setup.0.1.1.exe` (84 MB, Windows NSIS installer)
+- Download base URL: `https://github.com/johnthebasemaker/powerful-weapon/releases/download/v0.1.1/<filename>`
+- CI: builds Mac DMG + Windows .exe on every push to `main` (Whisper model NOT bundled — downloaded on first launch). Tag push (`v*`) triggers an additional `release` job that uploads to GitHub Releases.
+- **Important version-bump gotcha:** the file names embed the `version` from `package.json` at the time of the build. If you bump that field but don't commit + push before tagging, the tag will build the *previous* version's filenames. Always: bump → commit → push → tag → push tag.
 
 To pick up where things stand: clone, run *Quick start* in README.md, then re-trigger the workflow if needed.
 

@@ -30,8 +30,9 @@ And:
 - An **internet connection** — needed to download the app (one-time), set up speech-to-text (one-time, ~3 GB), and send WhatsApp messages day-to-day.
 - **WhatsApp Web** working in your browser (visit web.whatsapp.com once and scan the QR code from your phone).
 - About **5 GB of free disk space** total:
-  - ~200 MB for the app itself.
+  - ~125 MB for the app itself.
   - ~3 GB for the Tamil speech-to-text engine that's downloaded the first time you open the app.
+  - Some breathing room for the database, backups, and imported voice notes (grows slowly over time).
 
 ---
 
@@ -41,9 +42,13 @@ The app is small (~200 MB). When you open it the first time, it'll offer to down
 
 ### On a Mac
 
-> **Download:** https://github.com/johnthebasemaker/powerful-weapon/releases/download/v0.1.1/Powerful.Weapon-0.1.0.dmg
+> 📥 **Download Powerful Weapon for Mac:**
+> - [Apple Silicon Mac (M1 / M2 / M3 / M4 /M5 — most modern Macs)](https://github.com/johnthebasemaker/powerful-weapon/releases/download/v0.1.1/Powerful.Weapon-0.1.1-arm64.dmg) — 123 MB
+> - [Intel Mac (older models)](https://github.com/johnthebasemaker/powerful-weapon/releases/download/v0.1.1/Powerful.Weapon-0.1.1.dmg) — 127 MB
+>
+> Not sure which you have? Click the Apple logo at the top-left → **About This Mac**. If "Chip" starts with "Apple M…" pick Apple Silicon. If it says "Intel", pick Intel.
 
-1. Download the file `Powerful Weapon-0.1.1-arm64.dmg` (or `Powerful Weapon-0.1.1.dmg` if you have an older Intel-based Mac — about 200 MB).
+1. Download the right `.dmg` file from above.
 2. Double-click the `.dmg` file. A small window opens showing the **Powerful Weapon** icon next to an **Applications** folder.
 3. **Drag the Powerful Weapon icon onto the Applications folder.** This installs the app.
 4. Open Finder → Applications → double-click **Powerful Weapon**.
@@ -68,9 +73,9 @@ This is normal — it happens because the app was built for you personally and n
 
 ### On a Windows PC
 
-> **Download:** (https://github.com/johnthebasemaker/powerful-weapon/releases/download/v0.1.1/Powerful.Weapon.Setup.0.1.0.exe)
+> 📥 [**Download Powerful Weapon for Windows (For Windows 10 and 11)**](https://github.com/johnthebasemaker/powerful-weapon/releases/download/v0.1.1/Powerful.Weapon.Setup.0.1.1.exe)
 
-1. Download the file `Powerful Weapon Setup 0.1.1.exe` (about 150 MB).
+1. Download the file `Powerful Weapon Setup 0.1.1.exe` (about 84 MB).
 2. Find it in your Downloads folder and **double-click it**.
 3. The installer wizard opens. Click through it:
    - Choose where to install (the default location is fine — just click Next).

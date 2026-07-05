@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { parseUsersCsv } from '../lib/csv';
+import { api } from '../lib/api';
 import type { User } from '../types';
 
 export default function Users() {
@@ -8,14 +9,14 @@ export default function Users() {
   const [importStatus, setImportStatus] = useState('');
 
   async function load() {
-    setUsers((await window.api.users.list()) as User[]);
+    setUsers((await api().users.list()) as User[]);
   }
   useEffect(() => { load(); }, []);
 
   async function add() {
     if (!form.name.trim() || !form.phone.trim()) return;
     try {
-      await window.api.users.create(form.name.trim(), form.phone.trim(), form.joined_date);
+      await api().users.create(form.name.trim(), form.phone.trim(), form.joined_date);
       setForm({ name: '', phone: '', joined_date: new Date().toISOString().slice(0, 10) });
       load();
     } catch (e: any) {
@@ -24,25 +25,25 @@ export default function Users() {
   }
 
   async function toggleActive(u: User) {
-    await window.api.users.update(u.id, { active: u.active ? 0 : 1 });
+    await api().users.update(u.id, { active: u.active ? 0 : 1 });
     load();
   }
 
   async function remove(u: User) {
     if (!confirm(`Remove ${u.name}? Their voice notes will remain in history.`)) return;
-    await window.api.users.delete(u.id);
+    await api().users.delete(u.id);
     load();
   }
 
   async function importCsv() {
-    const picked = await window.api.files.pickCsv();
+    const picked = await api().files.pickCsv();
     if (!picked) return;
     const { rows, errors } = parseUsersCsv(picked.content);
     if (errors.length) {
       const proceed = confirm(`${errors.length} error(s):\n${errors.slice(0, 5).join('\n')}\n\nImport the ${rows.length} valid rows anyway?`);
       if (!proceed) return;
     }
-    const r = (await window.api.users.importCsv(rows)) as { inserted: number; total: number };
+    const r = (await api().users.importCsv(rows)) as { inserted: number; total: number };
     setImportStatus(`Imported ${r.inserted} / ${r.total} users.`);
     setTimeout(() => setImportStatus(''), 4000);
     load();
@@ -69,7 +70,7 @@ export default function Users() {
       {/* Add form */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <h2 className="font-medium mb-3">Add user</h2>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <input
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -98,8 +99,8 @@ export default function Users() {
       </div>
 
       {/* List */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+        <table className="w-full text-sm min-w-[560px]">
           <thead className="bg-gray-50 text-gray-600 text-left">
             <tr>
               <th className="px-4 py-2 font-medium">Name</th>
@@ -115,9 +116,9 @@ export default function Users() {
             )}
             {users.map((u) => (
               <tr key={u.id}>
-                <td className="px-4 py-2">{u.name}</td>
-                <td className="px-4 py-2 text-gray-600">{u.phone}</td>
-                <td className="px-4 py-2 text-gray-600">{u.joined_date}</td>
+                <td className="px-4 py-2 whitespace-nowrap">{u.name}</td>
+                <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{u.phone}</td>
+                <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{u.joined_date}</td>
                 <td className="px-4 py-2">
                   <button
                     onClick={() => toggleActive(u)}

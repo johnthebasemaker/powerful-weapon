@@ -2,6 +2,8 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   addDays, currentWeekStart, defaultUploadWeek, formatHuman, isPreviousWeek, weekdayLabel,
 } from '../lib/dates';
+import { api } from '../lib/api';
+import { takePendingShared, onSharedAudio } from '../lib/shareIntent';
 import type { Selection, User, VoiceNote } from '../types';
 
 type Mode = 'perDay' | 'allWeek';
@@ -37,11 +39,11 @@ export default function VoiceInbox() {
 
   async function load() {
     const [u, s, count, g, w] = await Promise.all([
-      window.api.users.list(),
-      window.api.selections.get(weekStart),
-      window.api.selections.count(weekStart),
-      window.api.voiceNotes.listGrouped(weekStart),
-      window.api.whisper.check(),
+      api().users.list(),
+      api().selections.get(weekStart),
+      api().selections.count(weekStart),
+      api().voiceNotes.listGrouped(weekStart),
+      api().whisper.check(),
     ]);
     setUsers(u as User[]);
     setSelections(s as Selection[]);
@@ -52,12 +54,19 @@ export default function VoiceInbox() {
   }
   useEffect(() => { load(); }, [weekStart]);
 
+  // Pull in any voice note shared from WhatsApp (cold start via queue, warm via listener).
+  useEffect(() => {
+    const incoming = takePendingShared();
+    if (incoming.length) setPendingFiles((p) => Array.from(new Set([...p, ...incoming])));
+    return onSharedAudio((keys) => setPendingFiles((p) => Array.from(new Set([...p, ...keys]))));
+  }, []);
+
   const allWeekReady = selectionCount === 7;
   const isPrev = isPreviousWeek(weekStart);
   const isCurrent = weekStart === currentWeekStart();
 
   async function pickFiles() {
-    const paths = (await window.api.files.pickVoiceNotes()) as string[];
+    const paths = (await api().files.pickVoiceNotes()) as string[];
     setPendingFiles(paths);
     setStatusMsg('');
   }
@@ -70,7 +79,7 @@ export default function VoiceInbox() {
     }
 
     // Duplicate check (by basename — handles cases where the same WhatsApp file is re-picked)
-    const exists = await window.api.voiceNotes.fileExists(
+    const exists = await api().voiceNotes.fileExists(
       Number(importTarget.userId), weekStart, srcPath
     );
     if (exists) {
@@ -85,18 +94,18 @@ export default function VoiceInbox() {
         (g) => g.user_id === Number(importTarget.userId) && g.file_path.endsWith(fileName)
       );
       if (oldRow) {
-        await window.api.voiceNotes.deleteByFile(oldRow.user_id, oldRow.week_start_date, oldRow.file_path);
+        await api().voiceNotes.deleteByFile(oldRow.user_id, oldRow.week_start_date, oldRow.file_path);
       }
     }
 
-    const imp = await window.api.files.importVoiceNote(srcPath);
+    const imp = await api().files.importVoiceNote(srcPath);
     if (!imp.ok) { alert(`Import failed: ${imp.error}`); return; }
 
     setBusy(true);
     setStatusMsg('Transcribing… this can take ~30-90 seconds per minute of audio.');
 
     if (mode === 'allWeek') {
-      const r = await window.api.whisper.transcribeAndGradeWeek({
+      const r = await api().whisper.transcribeAndGradeWeek({
         userId: Number(importTarget.userId), filePath: imp.path, weekStart,
       });
       if (!r.ok) { alert(`Grading failed: ${r.error}`); setBusy(false); setStatusMsg(''); return; }
@@ -104,12 +113,12 @@ export default function VoiceInbox() {
     } else {
       const sel = selections.find((s) => s.slot === importTarget.slot);
       if (!sel) { alert('No verse for that day.'); setBusy(false); setStatusMsg(''); return; }
-      const vn = await window.api.voiceNotes.create({
+      const vn = await api().voiceNotes.create({
         user_id: importTarget.userId, week_start_date: weekStart,
         verse_slot: importTarget.slot, file_path: imp.path,
       });
       if (whisper?.ok) {
-        await window.api.whisper.transcribeAndGrade({
+        await api().whisper.transcribeAndGrade({
           voiceNoteId: vn.id, filePath: imp.path,
           referenceText: sel.text_tamil,
           referenceCitation: { book: sel.book, chapter: sel.chapter, verse: sel.verse },
@@ -129,20 +138,20 @@ export default function VoiceInbox() {
       setExpandedDetails([]);
       return;
     }
-    const details = (await window.api.voiceNotes.detailsByFile(g.user_id, g.week_start_date, g.file_path)) as VoiceNote[];
+    const details = (await api().voiceNotes.detailsByFile(g.user_id, g.week_start_date, g.file_path)) as VoiceNote[];
     setExpandedDetails(details);
     setExpandedKey(key);
   }
 
   async function removeGroup(g: GroupedNote) {
     if (!confirm(`Remove ${g.user_name}'s voice note (${g.verse_count} graded ${g.verse_count > 1 ? 'verses' : 'verse'})?`)) return;
-    await window.api.voiceNotes.deleteByFile(g.user_id, g.week_start_date, g.file_path);
+    await api().voiceNotes.deleteByFile(g.user_id, g.week_start_date, g.file_path);
     load();
   }
 
   async function clearAllWeek() {
     if (!confirm(`Remove ALL imported voice notes for the week of ${formatHuman(weekStart)}? This cannot be undone.`)) return;
-    await window.api.voiceNotes.deleteAllForWeek(weekStart);
+    await api().voiceNotes.deleteAllForWeek(weekStart);
     load();
   }
 
@@ -157,7 +166,7 @@ export default function VoiceInbox() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-end justify-between">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Voice Inbox</h1>
           <p className="text-sm text-gray-500 mt-1">Import WhatsApp voice notes, grade automatically.</p>
@@ -208,7 +217,7 @@ export default function VoiceInbox() {
       {/* Mode toggle */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <h2 className="font-medium mb-3">Grading mode</h2>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <ModeCard
             active={mode === 'allWeek'}
             onClick={() => setMode('allWeek')}
@@ -247,7 +256,7 @@ export default function VoiceInbox() {
 
         {pendingFiles.length > 0 && (
           <div className="border-t border-gray-100 pt-3 space-y-3">
-            <div className={`grid ${mode === 'allWeek' ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>
+            <div className={`grid ${mode === 'allWeek' ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'} gap-3`}>
               <div>
                 <label className="text-xs text-gray-500">Speaker</label>
                 <select
@@ -313,8 +322,8 @@ export default function VoiceInbox() {
             Nothing here yet.
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
               <thead className="bg-gray-50 text-gray-600 text-left">
                 <tr>
                   <th className="px-3 py-2 font-medium">User</th>

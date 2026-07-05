@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { api } from '../lib/api';
 import { currentWeekStart, dateForSlot, weekdayLabel } from '../lib/dates';
 import type { Selection } from '../types';
 
@@ -23,13 +24,13 @@ export default function Dashboard() {
   const [whisper, setWhisper] = useState<{ ok: boolean; reason?: string } | null>(null);
 
   async function load() {
-    const ws = await window.api.scheduler.currentWeekStart();
+    const ws = await api().scheduler.currentWeekStart();
     setWeekStart(ws);
     const [sels, miss, cnt, ws2] = await Promise.all([
-      window.api.selections.get(ws),
-      window.api.scheduler.checkMissed(),
-      window.api.verses.count(),
-      window.api.whisper.check(),
+      api().selections.get(ws),
+      api().scheduler.checkMissed(),
+      api().verses.count(),
+      api().whisper.check(),
     ]);
     setSelections(sels as Selection[]);
     setPending(miss as PendingSlot[]);
@@ -39,12 +40,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     load();
-    const off = window.api.on('scheduler:fire', () => load());
+    const off = api().on('scheduler:fire', () => load());
     return () => off();
   }, []);
 
   async function handleSend(p: PendingSlot) {
-    await window.api.whatsapp.prepareSend({
+    await api().whatsapp.prepareSend({
       book: p.book, chapter: p.chapter, verse: p.verse,
       text: p.text_tamil, dateStr: p.dateStr,
       verseId: p.verse_id, weekStart: p.weekStart, slot: p.slot,
@@ -59,7 +60,7 @@ export default function Dashboard() {
   }
 
   async function handleMarkSent(p: PendingSlot) {
-    await window.api.whatsapp.markSentBySlot(p.weekStart, p.slot);
+    await api().whatsapp.markSentBySlot(p.weekStart, p.slot);
     load();
   }
 
@@ -73,7 +74,7 @@ export default function Dashboard() {
       </header>
 
       {/* Status cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card title="Bible verses" value={verseCount.toLocaleString()} hint={verseCount < 1000 ? 'Sample only — import full Tamil OV' : 'Full Bible loaded'} />
         <Card title="This week's selections" value={`${selections.length} / 7`} hint={selections.length < 7 ? 'Go to Verse Picker' : 'Ready'} />
         <Card title="Whisper STT" value={whisper?.ok ? 'Ready' : 'Not installed'} hint={whisper?.ok ? 'Model loaded' : 'Set up in Settings'} />

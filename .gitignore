@@ -5,6 +5,16 @@ release/
 data/
 *.log
 .DS_Store
+
+# IDE / Android Studio project files
+.idea/
+
+# Capacitor Android build outputs (the android/ project itself IS tracked;
+# cap add android writes its own android/.gitignore for these).
+android/app/build/
+android/build/
+android/.gradle/
+android/capacitor-cordova-android-plugins/
 .env
 .env.local
 tsconfig.tsbuildinfo
@@ -34,3 +44,14 @@ resources/icons/icon.png
 *.dmg
 *.dmg.blockmap
 release/
+
+# Mobile: optional full verse DB override (copy tamil-ov.json here for release)
+public/verses.full.json
+
+# Android release signing — NEVER commit
+android/keystore.properties
+*.jks
+*.keystore
+
+# Capacitor asset source (icon of record lives in resources/icons/)
+assets/

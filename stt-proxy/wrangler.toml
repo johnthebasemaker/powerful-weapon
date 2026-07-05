@@ -1,0 +1,7 @@
+name = "powerful-weapon-stt"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# Do NOT put secrets in this file. Set them with:
+#   npx wrangler secret put OPENAI_API_KEY
+#   npx wrangler secret put PROXY_SECRET   # optional

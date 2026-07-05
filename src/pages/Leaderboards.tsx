@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { currentWeekStart, yearBounds } from '../lib/dates';
+import { api } from '../lib/api';
+import { saveTextFile } from '../lib/exportFile';
 import type { ConsistencyRow, ScoreRow } from '../types';
 
 type Tab = 'consistency' | 'weekly' | 'yearly';
@@ -15,16 +17,16 @@ export default function Leaderboards() {
   async function load() {
     const { start, end } = yearBounds(year);
     if (tab === 'consistency') {
-      setConsistency((await window.api.leaderboard.consistency(start, end)) as ConsistencyRow[]);
+      setConsistency((await api().leaderboard.consistency(start, end)) as ConsistencyRow[]);
     } else if (tab === 'weekly') {
-      setWeekly((await window.api.leaderboard.scores(weekStart, start, end)) as ScoreRow[]);
+      setWeekly((await api().leaderboard.scores(weekStart, start, end)) as ScoreRow[]);
     } else {
-      setYearly((await window.api.leaderboard.scores(null, start, end)) as ScoreRow[]);
+      setYearly((await api().leaderboard.scores(null, start, end)) as ScoreRow[]);
     }
   }
   useEffect(() => { load(); }, [tab, year, weekStart]);
 
-  function exportCsv() {
+  async function exportCsv() {
     let rows: string[][] = [];
     if (tab === 'consistency') {
       rows = [['Rank', 'Name', 'Weeks Present', 'Voice Notes']];
@@ -35,18 +37,13 @@ export default function Leaderboards() {
       data.forEach((r, i) => rows.push([String(i + 1), r.name, r.avg_score.toFixed(1), String(r.notes_count)]));
     }
     const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `leaderboard-${tab}-${year}${tab === 'weekly' ? '-' + weekStart : ''}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const filename = `leaderboard-${tab}-${year}${tab === 'weekly' ? '-' + weekStart : ''}.csv`;
+    await saveTextFile(filename, csv, 'text/csv');
   }
 
   return (
     <div className="space-y-6">
-      <header className="flex items-end justify-between">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Leaderboards</h1>
           <p className="text-sm text-gray-500 mt-1">Track consistency and recitation quality.</p>
@@ -90,7 +87,7 @@ export default function Leaderboards() {
       </div>
 
       {/* Tables */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
         {tab === 'consistency' && (
           <Table
             headers={['Rank', 'Name', 'Weeks present', 'Voice notes']}

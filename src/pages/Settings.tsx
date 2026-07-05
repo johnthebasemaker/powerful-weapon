@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { api } from '../lib/api';
+import { isNative } from '../lib/platform';
 import type { Settings } from '../types';
 
 export default function SettingsPage() {
@@ -10,10 +12,10 @@ export default function SettingsPage() {
 
   async function load() {
     const [s, w, c, b] = await Promise.all([
-      window.api.settings.getAll(),
-      window.api.whisper.check(),
-      window.api.verses.count(),
-      window.api.backup.lastRun(),
+      api().settings.getAll(),
+      api().whisper.check(),
+      api().verses.count(),
+      api().backup.lastRun(),
     ]);
     setSettings(s as Settings);
     setWhisper(w as any);
@@ -23,25 +25,25 @@ export default function SettingsPage() {
   useEffect(() => { load(); }, []);
 
   async function setKey(key: string, value: string) {
-    await window.api.settings.set(key, value);
+    await api().settings.set(key, value);
     setSettings((s) => ({ ...s, [key]: value }));
   }
 
   async function save() {
     if (settings.send_time) {
-      await window.api.scheduler.start(settings.send_time);
+      await api().scheduler.start(settings.send_time);
     }
     setSavedMsg('Saved.');
     setTimeout(() => setSavedMsg(''), 2000);
   }
 
   async function pickBackupFolder() {
-    const folder = (await window.api.backup.pickFolder()) as string | null;
+    const folder = (await api().backup.pickFolder()) as string | null;
     if (folder) setKey('backup_folder', folder);
   }
 
   async function runBackup() {
-    const r = await window.api.backup.runNow();
+    const r = await api().backup.runNow();
     if (r.ok) {
       setLastBackup(r.path);
       alert(`Backup written:\n${r.path}`);
@@ -128,12 +130,19 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* Speech-to-Text */}
-      <WhisperSection
-        whisperOk={whisper?.ok ?? false}
-        whisperReason={whisper?.reason}
-        onChange={load}
-      />
+      {/* Speech-to-Text: cloud proxy on mobile, local Whisper on desktop */}
+      {isNative() ? (
+        <MobileSttSection
+          value={settings.stt_proxy_url ?? ''}
+          onChange={(v) => setKey('stt_proxy_url', v)}
+        />
+      ) : (
+        <WhisperSection
+          whisperOk={whisper?.ok ?? false}
+          whisperReason={whisper?.reason}
+          onChange={load}
+        />
+      )}
 
 
       {/* Bible data */}
@@ -164,6 +173,38 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
       {children}
       {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
     </div>
+  );
+}
+
+function MobileSttSection({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [url, setUrl] = useState(value);
+  useEffect(() => setUrl(value), [value]);
+  return (
+    <section className="bg-white rounded-xl border border-gray-200 p-5">
+      <h2 className="font-medium mb-2">Speech-to-Text (cloud)</h2>
+      <p className="text-sm text-gray-600 mb-3">
+        Voice grading sends audio to your Speech-to-text proxy, which holds the API key.
+        Leave blank to import voice notes without auto-grading.
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://your-stt-proxy.example.com/transcribe"
+          className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
+        />
+        <button
+          onClick={() => onChange(url.trim())}
+          className="px-3 py-2 bg-brand-500 text-white text-sm rounded-md hover:bg-brand-600"
+        >
+          Save
+        </button>
+      </div>
+      <p className="text-xs text-gray-500 mt-2">
+        {value ? '✅ Proxy configured — voice grading enabled.' : 'Not set — grading disabled.'}
+      </p>
+    </section>
   );
 }
 
@@ -198,13 +239,13 @@ function WhisperSection({ whisperOk, whisperReason, onChange }: {
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
 
   async function refresh() {
-    const s = (await window.api.whisper.modelStatus()) as ModelStatus;
+    const s = (await api().whisper.modelStatus()) as ModelStatus;
     setStatus(s);
   }
 
   useEffect(() => {
     refresh();
-    const off = window.api.on('whisper:download-progress', (p: DownloadProgress) => {
+    const off = api().on('whisper:download-progress', (p: DownloadProgress) => {
       setProgress(p);
       if (p.stage === 'done' || p.stage === 'error' || p.stage === 'cancelled') {
         setDownloading(false);
@@ -218,7 +259,7 @@ function WhisperSection({ whisperOk, whisperReason, onChange }: {
   async function startDownload() {
     setDownloading(true);
     setProgress({ stage: 'connecting' });
-    const r = await window.api.whisper.downloadModel();
+    const r = await api().whisper.downloadModel();
     setDownloading(false);
     if (!r.ok && r.error !== 'Cancelled') {
       alert(`Download failed: ${r.error}`);
@@ -228,12 +269,12 @@ function WhisperSection({ whisperOk, whisperReason, onChange }: {
   }
 
   async function cancel() {
-    await window.api.whisper.cancelDownload();
+    await api().whisper.cancelDownload();
   }
 
   async function remove() {
     if (!confirm('Delete the downloaded Whisper model? You can re-download it later, but it\'s a 3 GB transfer.')) return;
-    await window.api.whisper.deleteModel();
+    await api().whisper.deleteModel();
     refresh();
     onChange();
   }

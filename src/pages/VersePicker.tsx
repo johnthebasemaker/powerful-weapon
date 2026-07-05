@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { currentWeekStart } from '../lib/dates';
+import { api } from '../lib/api';
 import type { RankedVerse, Selection } from '../types';
 
 export default function VersePicker() {
@@ -12,7 +13,7 @@ export default function VersePicker() {
   const [savedMsg, setSavedMsg] = useState('');
 
   async function loadExisting(ws: string) {
-    const sel = (await window.api.selections.get(ws)) as Selection[];
+    const sel = (await api().selections.get(ws)) as Selection[];
     setExisting(sel);
     if (sel.length && sel[0].root_word) setRootWord(sel[0].root_word);
   }
@@ -24,7 +25,7 @@ export default function VersePicker() {
   async function handleSearch() {
     if (!rootWord.trim()) return;
     setSearching(true);
-    const rows = (await window.api.verses.search(rootWord.trim(), 50)) as RankedVerse[];
+    const rows = (await api().verses.search(rootWord.trim(), 50)) as RankedVerse[];
     setResults(rows);
     setSearching(false);
   }
@@ -41,7 +42,7 @@ export default function VersePicker() {
 
   async function toggleMemory(v: RankedVerse) {
     const newVal = !v.is_memory_verse;
-    await window.api.verses.toggleMemory(v.id, newVal);
+    await api().verses.toggleMemory(v.id, newVal);
     setResults((r) => r.map((x) => (x.id === v.id ? { ...x, is_memory_verse: newVal ? 1 : 0 } : x)));
   }
 
@@ -51,7 +52,7 @@ export default function VersePicker() {
       return;
     }
     const ids = Array.from(picked.values()).map((v) => v.id);
-    await window.api.selections.save(weekStart, rootWord.trim(), ids);
+    await api().selections.save(weekStart, rootWord.trim(), ids);
     setSavedMsg('Saved.');
     setTimeout(() => setSavedMsg(''), 2000);
     loadExisting(weekStart);
@@ -60,7 +61,7 @@ export default function VersePicker() {
 
   async function clearWeek() {
     if (!confirm('Clear the 7 selected verses for this week?')) return;
-    await window.api.selections.save(weekStart, '', []);
+    await api().selections.save(weekStart, '', []);
     loadExisting(weekStart);
   }
 
@@ -68,7 +69,7 @@ export default function VersePicker() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-end justify-between">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Verse Picker</h1>
           <p className="text-sm text-gray-500 mt-1">

@@ -6,8 +6,14 @@ import Users from './pages/Users';
 import VoiceInbox from './pages/VoiceInbox';
 import Leaderboards from './pages/Leaderboards';
 import Settings from './pages/Settings';
+import { useAndroidBackButton } from './lib/useAndroidBackButton';
+import { useShareIntent } from './lib/shareIntent';
+import { useReminderTap } from './lib/scheduler';
 
 export default function App() {
+  useAndroidBackButton(); // Android hardware back button → router history / clean exit
+  useShareIntent();       // WhatsApp "Share → Powerful Weapon" → Voice Inbox
+  useReminderTap();       // Tapping the daily reminder → Dashboard to post
   return (
     <Layout>
       <Routes>

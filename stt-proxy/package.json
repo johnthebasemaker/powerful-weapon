@@ -1,0 +1,13 @@
+{
+  "name": "powerful-weapon-stt-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Speech-to-Text proxy for the Powerful Weapon Android app (keeps the STT vendor key off-device).",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.107.0"
+  }
+}

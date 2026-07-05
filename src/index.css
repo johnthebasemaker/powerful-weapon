@@ -8,6 +8,17 @@ html, body, #root {
   background: #f5f7ff;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   color: #1f2440;
+  /* Prevent iOS/Android rubber-band letting content slide under the notch. */
+  overscroll-behavior: none;
+}
+
+/* Safe-area helpers (task 3). Non-zero only with viewport-fit=cover + a device
+   that reports insets; harmless (0px) on desktop and older devices. */
+.safe-top    { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 .tamil {
@@ -15,8 +26,13 @@ html, body, #root {
   line-height: 1.8;
 }
 
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: #c8cfe4; border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: #a3aed0; }
 
+/* Electron-only: exempt buttons from the draggable title-bar region.
+   No-op inside a mobile webview, so it is safe to leave in place. */
 button { -webkit-app-region: no-drag; }

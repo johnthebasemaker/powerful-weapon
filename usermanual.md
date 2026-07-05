@@ -422,7 +422,7 @@ First, don't panic. Look at your backup folder (Settings → Backup folder). Ins
 After the first-time setup, yes — for everything except sending WhatsApp messages. The Tamil Bible, verse picker, and speech-to-text all run offline. *Internet is needed for*: (1) the initial app download, (2) the one-time 3 GB speech-to-text model download on first launch, (3) sending WhatsApp messages day-to-day.
 
 **Q: Can I use a different Bible translation?**
-The app ships with the Tamil Old Version (1956). If you have another translation as JSON, you can import it — ask Andrew.
+The app ships with the Tamil Old Version (1956). If you have another translation as JSON, you can import it — ask Johnson.
 
 **Q: Can two people use the app for the same group?**
 The database is on one computer. Two people on different computers would each have their own copy. For now, designate one "admin" computer.
@@ -434,7 +434,7 @@ No. Open the app and you'll see banners showing what wasn't sent. You can still 
 Yes. Nothing ever leaves your computer. There are no servers, no analytics, no cloud accounts. The only network connections the app makes are: (1) opening WhatsApp Web in your browser when you send a daily verse, (2) checking for updates if enabled.
 
 **Q: How do I update the app?**
-When a new version is ready, you'll get a new `.dmg` or `.zip` from Andrew. Install it the same way — your existing data is kept (it lives in a separate folder).
+When a new version is ready, you'll get a new `.dmg` or `.zip` from Johnson. Install it the same way — your existing data is kept (it lives in a separate folder).
 
 ---
 

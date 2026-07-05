@@ -1,0 +1,8 @@
+# Local dev secrets for `npm run dev` (copy to .dev.vars — which is gitignored).
+# Default vendor is Groq (free): get a key at https://console.groq.com (gsk_...).
+STT_API_KEY=gsk_your_groq_key
+# Optional overrides for a different OpenAI-compatible vendor:
+# STT_ENDPOINT=https://api.openai.com/v1/audio/transcriptions
+# STT_MODEL=whisper-1
+# Optional: require the app to send header x-stt-secret matching this value.
+# PROXY_SECRET=a-long-random-string

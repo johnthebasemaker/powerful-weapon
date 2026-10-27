@@ -3,5 +3,12 @@ main = "worker.js"
 compatibility_date = "2024-11-01"
 
 # Do NOT put secrets in this file. Set them with:
-#   npx wrangler secret put OPENAI_API_KEY
+#   npx wrangler secret put STT_API_KEY    # Groq key
 #   npx wrangler secret put PROXY_SECRET   # optional
+#   npx wrangler secret put ADMIN_KEY      # required to publish the weekly verses
+
+# Weekly verse feed for members' phones. Create once, then paste the id here:
+#   npx wrangler kv namespace create WEEKS
+[[kv_namespaces]]
+binding = "WEEKS"
+id = "1ebf566b9d5b4a0fa655978f8445d518"

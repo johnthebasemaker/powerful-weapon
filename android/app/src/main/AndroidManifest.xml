@@ -48,4 +48,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 13+ runtime notification permission for the daily post reminder. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Lets the daily verse fire at the exact send time (user can grant it under
+         Settings → Apps → Special access → Alarms & reminders on Android 12+).
+         Without it the plugin falls back to an inexact wake-up alarm. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 </manifest>

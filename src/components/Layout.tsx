@@ -1,104 +1,137 @@
-import { NavLink } from 'react-router-dom';
-import { ReactNode, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { ReactNode, useEffect, useState } from 'react';
+import { useRole } from '../lib/role';
+import ErrorBoundary from './ErrorBoundary';
+import { cx } from './ui';
+import {
+  IconBook, IconCalendar, IconHome, IconMic, IconMore, IconSettings, IconTrophy, IconUsers,
+} from './icons';
 
-const navItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: '🏠' },
-  { to: '/verses', label: 'Verse Picker', icon: '📖' },
-  { to: '/users', label: 'Users', icon: '👥' },
-  { to: '/voice-inbox', label: 'Voice Inbox', icon: '🎙️' },
-  { to: '/leaderboards', label: 'Leaderboards', icon: '🏆' },
-  { to: '/settings', label: 'Settings', icon: '⚙️' },
+interface NavItem { to: string; label: string; icon: () => JSX.Element; match?: string[] }
+
+// Phone: bottom tabs (thumb reach, always visible). Desktop: the same items in a sidebar.
+const ADMIN_TABS: NavItem[] = [
+  { to: '/dashboard', label: 'Home', icon: IconHome },
+  { to: '/verses', label: 'Verses', icon: IconBook },
+  { to: '/voice-inbox', label: 'Voice', icon: IconMic },
+  { to: '/leaderboards', label: 'Ranks', icon: IconTrophy },
+  { to: '/more', label: 'More', icon: IconMore, match: ['/more', '/users', '/settings'] },
+];
+const ADMIN_SIDEBAR: NavItem[] = [
+  ...ADMIN_TABS.slice(0, 4),
+  { to: '/users', label: 'Members', icon: IconUsers },
+  { to: '/settings', label: 'Settings', icon: IconSettings },
+];
+const MEMBER_TABS: NavItem[] = [
+  { to: '/today', label: 'Today', icon: IconHome },
+  { to: '/week', label: 'This week', icon: IconCalendar },
+  { to: '/settings', label: 'Settings', icon: IconSettings },
 ];
 
-function NavList({ onNavigate }: { onNavigate?: () => void }) {
+const TITLES: Record<string, string> = {
+  '/dashboard': 'Home', '/verses': 'Verse Picker', '/voice-inbox': 'Voice Inbox',
+  '/leaderboards': 'Leaderboards', '/more': 'More', '/users': 'Members', '/settings': 'Settings',
+  '/today': "Today's verse", '/week': 'This week',
+};
+
+/** Hide the bottom bar while the on-screen keyboard is up (it would ride on top of it). */
+function useKeyboardOpen(): boolean {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const base = window.innerHeight;
+    const onResize = () => setOpen(window.innerHeight < base - 150);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return open;
+}
+
+function Brand({ compact }: { compact?: boolean }) {
   return (
-    <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-      {navItems.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          onClick={onNavigate}
-          className={({ isActive }) =>
-            `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition ${
-              isActive ? 'bg-brand-100 text-brand-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
-            }`
-          }
-        >
-          <span className="text-base">{item.icon}</span>
-          {item.label}
-        </NavLink>
-      ))}
-    </nav>
+    <div className="flex items-center gap-2.5 min-w-0">
+      <img src="brand/icon-192.png" alt="" className={cx('rounded-xl shrink-0', compact ? 'w-9 h-9' : 'w-10 h-10')} />
+      <div className="min-w-0 leading-tight">
+        <div className="text-[15px] font-semibold text-white truncate">Powerful Weapon</div>
+        <div className="tamil text-[11px] text-gold-300 truncate" style={{ lineHeight: 1.3 }}>கர்த்தருடைய வார்த்தை</div>
+      </div>
+    </div>
   );
 }
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const { role } = useRole();
+  const loc = useLocation();
+  const keyboardOpen = useKeyboardOpen();
+  const tabs = role === 'member' ? MEMBER_TABS : ADMIN_TABS;
+  const sidebar = role === 'member' ? MEMBER_TABS : ADMIN_SIDEBAR;
+  const title = TITLES[loc.pathname] ?? '';
+
+  // Scroll to top on tab change (the scroller is <main>, not the window).
+  useEffect(() => { document.getElementById('app-main')?.scrollTo(0, 0); }, [loc.pathname]);
 
   return (
-    <div className="flex h-screen bg-brand-50">
-      {/* Desktop sidebar (unchanged) */}
-      <aside className="hidden md:flex w-60 bg-white border-r border-gray-200 flex-col safe-top safe-x">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <div className="text-lg font-semibold text-brand-700">Powerful Weapon</div>
-          <div className="text-xs text-gray-500">Tamil Bible Study</div>
-        </div>
-        <NavList />
-        <div className="px-4 py-3 border-t border-gray-100 text-xs text-gray-400">
-          v0.1.1 · For non-commercial use
-        </div>
+    <div className="flex h-screen bg-paper">
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex w-64 bg-brand-900 text-white flex-col safe-top">
+        <div className="px-5 py-5 border-b border-white/10"><Brand /></div>
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          {sidebar.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) => cx(
+                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition',
+                isActive ? 'bg-white/10 text-white font-medium' : 'text-white/70 hover:bg-white/5 hover:text-white',
+              )}
+            >
+              <item.icon />
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="px-5 py-4 border-t border-white/10 text-xs text-white/40">v0.0.3 · For non-commercial use</div>
       </aside>
 
-      {/* Mobile slide-in drawer + scrim */}
-      <div className={`md:hidden fixed inset-0 z-40 ${drawerOpen ? '' : 'pointer-events-none'}`}>
-        <div
-          className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${drawerOpen ? 'opacity-100' : 'opacity-0'}`}
-          onClick={() => setDrawerOpen(false)}
-        />
-        <aside
-          className={`absolute left-0 top-0 bottom-0 w-72 max-w-[82%] bg-white shadow-xl flex flex-col safe-top safe-x transition-transform duration-200 ${drawerOpen ? 'translate-x-0' : '-translate-x-full'}`}
-        >
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <div>
-              <div className="text-lg font-semibold text-brand-700">Powerful Weapon</div>
-              <div className="text-xs text-gray-500">Tamil Bible Study</div>
-            </div>
-            <button
-              onClick={() => setDrawerOpen(false)}
-              aria-label="Close menu"
-              className="p-2 -mr-2 text-gray-500 hover:text-gray-800"
-            >
-              ✕
-            </button>
-          </div>
-          <NavList onNavigate={() => setDrawerOpen(false)} />
-        </aside>
-      </div>
-
-      {/* Content column */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile top app bar with hamburger */}
-        <header className="md:hidden bg-white border-b border-gray-200 safe-top safe-x flex items-center gap-3 px-4 py-3">
-          <button
-            onClick={() => setDrawerOpen(true)}
-            aria-label="Open menu"
-            className="p-2 -ml-2 rounded-md hover:bg-gray-100 text-gray-700"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
-          <div className="min-w-0">
-            <div className="text-base font-semibold text-brand-700 leading-tight truncate">Powerful Weapon</div>
-            <div className="text-[11px] text-gray-500 leading-tight">Tamil Bible Study</div>
+        {/* Phone app bar — dark, carries the logo; padded under the status bar / notch */}
+        <header className="md:hidden bg-brand-900 safe-top shadow-lift z-20">
+          <div className="safe-x h-14 flex items-center justify-between gap-3">
+            <Brand compact />
+            {title && <span className="text-xs text-white/60 truncate">{title}</span>}
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto safe-x safe-bottom">
-          <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-4 md:py-6">{children}</div>
+        <main id="app-main" className="flex-1 overflow-y-auto">
+          <div className="w-full max-w-3xl mx-auto px-4 md:px-8 pt-4 md:pt-8 pb-tabbar md:pb-10"><ErrorBoundary resetKey={loc.pathname}>{children}</ErrorBoundary></div>
         </main>
+
+        {/* Phone bottom tab bar */}
+        {!keyboardOpen && (
+          <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-black/5 safe-bottom">
+            <div className="flex">
+              {tabs.map((item) => {
+                const active = (item.match ?? [item.to]).includes(loc.pathname);
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className="flex-1 flex flex-col items-center justify-center gap-1 h-16 min-w-0"
+                  >
+                    <span className={cx(
+                      'h-8 w-14 rounded-full grid place-items-center transition',
+                      active ? 'bg-brand-100 text-brand-800' : 'text-gray-500',
+                    )}>
+                      <item.icon />
+                    </span>
+                    <span className={cx('text-[11px] leading-none truncate', active ? 'text-brand-800 font-semibold' : 'text-gray-500')}>
+                      {item.label}
+                    </span>
+                  </NavLink>
+                );
+              })}
+            </div>
+          </nav>
+        )}
       </div>
     </div>
   );

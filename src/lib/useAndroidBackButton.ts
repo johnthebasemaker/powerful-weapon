@@ -20,7 +20,7 @@ export function useAndroidBackButton() {
     if (!isAndroid()) return;
     let handle: { remove: () => void } | undefined;
     const pending = App.addListener('backButton', ({ canGoBack }) => {
-      const atRoot = path.current === '/' || path.current === '/dashboard';
+      const atRoot = ['/', '/dashboard', '/today'].includes(path.current);
       if (atRoot || !canGoBack) App.exitApp();
       else navigate(-1);
     });

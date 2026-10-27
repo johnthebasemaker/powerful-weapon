@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react';
 import { parseUsersCsv } from '../lib/csv';
 import { api } from '../lib/api';
+import { localIso } from '../lib/dates';
+import { toast } from '../lib/toast';
+import { Button, Card, Empty, Field, Input, PageHeader, SectionTitle, cx } from '../components/ui';
+import { IconTrash, IconUpload } from '../components/icons';
 import type { User } from '../types';
+
+const today = () => localIso(new Date());
 
 export default function Users() {
   const [users, setUsers] = useState<User[]>([]);
-  const [form, setForm] = useState({ name: '', phone: '', joined_date: new Date().toISOString().slice(0, 10) });
-  const [importStatus, setImportStatus] = useState('');
+  const [form, setForm] = useState({ name: '', phone: '', joined_date: today() });
+  const [showAdd, setShowAdd] = useState(false);
 
   async function load() {
     setUsers((await api().users.list()) as User[]);
@@ -14,13 +20,15 @@ export default function Users() {
   useEffect(() => { load(); }, []);
 
   async function add() {
-    if (!form.name.trim() || !form.phone.trim()) return;
+    if (!form.name.trim() || !form.phone.trim()) { toast('Enter a name and phone number', 'error'); return; }
     try {
       await api().users.create(form.name.trim(), form.phone.trim(), form.joined_date);
-      setForm({ name: '', phone: '', joined_date: new Date().toISOString().slice(0, 10) });
+      setForm({ name: '', phone: '', joined_date: today() });
+      setShowAdd(false);
+      toast('Member added', 'success', 1800);
       load();
     } catch (e: any) {
-      alert(`Could not add user: ${e.message ?? e}`);
+      toast(`Could not add member: ${e.message ?? e}`, 'error');
     }
   }
 
@@ -44,97 +52,66 @@ export default function Users() {
       if (!proceed) return;
     }
     const r = (await api().users.importCsv(rows)) as { inserted: number; total: number };
-    setImportStatus(`Imported ${r.inserted} / ${r.total} users.`);
-    setTimeout(() => setImportStatus(''), 4000);
+    toast(`Imported ${r.inserted} of ${r.total} members`, 'success');
     load();
   }
 
-  return (
-    <div className="space-y-6">
-      <header className="flex items-end justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Users</h1>
-          <p className="text-sm text-gray-500 mt-1">Group members ({users.length})</p>
-        </div>
-        <button onClick={importCsv} className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-sm hover:bg-gray-50">
-          Import CSV
-        </button>
-      </header>
+  const active = users.filter((u) => u.active).length;
 
-      {importStatus && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-sm text-emerald-800">
-          {importStatus}
-        </div>
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        title="Members"
+        subtitle={`${users.length} in the group · ${active} active`}
+        action={<Button variant="secondary" size="sm" onClick={importCsv}><IconUpload /> CSV</Button>}
+      />
+
+      {showAdd ? (
+        <Card className="space-y-3">
+          <SectionTitle>Add member</SectionTitle>
+          <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full name" autoComplete="off" /></Field>
+          <Field label="WhatsApp number"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+91 98765 43210" type="tel" inputMode="tel" /></Field>
+          <Field label="Joined on"><Input type="date" value={form.joined_date} onChange={(e) => setForm({ ...form, joined_date: e.target.value })} /></Field>
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <Button variant="secondary" onClick={() => setShowAdd(false)}>Cancel</Button>
+            <Button onClick={add}>Add</Button>
+          </div>
+          <p className="text-xs text-gray-500">CSV import format: <code>name,phone,joined_date</code> (header row optional).</p>
+        </Card>
+      ) : (
+        <Button block onClick={() => setShowAdd(true)}>+ Add member</Button>
       )}
 
-      {/* Add form */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <h2 className="font-medium mb-3">Add user</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-          <input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="Name"
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm col-span-1"
-          />
-          <input
-            value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            placeholder="Phone (+91...)"
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm col-span-1"
-          />
-          <input
-            type="date"
-            value={form.joined_date}
-            onChange={(e) => setForm({ ...form, joined_date: e.target.value })}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm col-span-1"
-          />
-          <button onClick={add} className="bg-brand-500 text-white rounded-md px-3 py-2 text-sm hover:bg-brand-600">
-            Add
-          </button>
-        </div>
-        <p className="text-xs text-gray-500 mt-2">
-          CSV format: <code>name,phone,joined_date</code> (header row optional).
-        </p>
-      </div>
-
-      {/* List */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-        <table className="w-full text-sm min-w-[560px]">
-          <thead className="bg-gray-50 text-gray-600 text-left">
-            <tr>
-              <th className="px-4 py-2 font-medium">Name</th>
-              <th className="px-4 py-2 font-medium">Phone</th>
-              <th className="px-4 py-2 font-medium">Joined</th>
-              <th className="px-4 py-2 font-medium">Status</th>
-              <th className="px-4 py-2 font-medium w-32"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {users.length === 0 && (
-              <tr><td colSpan={5} className="text-center text-gray-400 py-8">No users yet.</td></tr>
-            )}
-            {users.map((u) => (
-              <tr key={u.id}>
-                <td className="px-4 py-2 whitespace-nowrap">{u.name}</td>
-                <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{u.phone}</td>
-                <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{u.joined_date}</td>
-                <td className="px-4 py-2">
-                  <button
-                    onClick={() => toggleActive(u)}
-                    className={`text-xs px-2 py-0.5 rounded-full ${u.active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'}`}
-                  >
-                    {u.active ? 'Active' : 'Inactive'}
-                  </button>
-                </td>
-                <td className="px-4 py-2 text-right">
-                  <button onClick={() => remove(u)} className="text-xs text-red-600 hover:underline">Remove</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {users.length === 0 ? (
+        <Empty icon="👥" title="No members yet">Add the people in your WhatsApp group, or import them from a CSV file.</Empty>
+      ) : (
+        <Card pad={false} className="divide-y divide-gray-100 overflow-hidden">
+          {users.map((u) => (
+            <div key={u.id} className="flex items-center gap-3 px-4 py-3">
+              <span className={cx(
+                'w-10 h-10 rounded-full grid place-items-center font-semibold shrink-0',
+                u.active ? 'bg-brand-100 text-brand-800' : 'bg-gray-100 text-gray-400',
+              )}>
+                {u.name.trim().charAt(0).toUpperCase()}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className={cx('text-[15px] font-medium truncate', !u.active && 'text-gray-400')}>{u.name}</div>
+                <div className="text-xs text-gray-500 truncate">{u.phone} · joined {u.joined_date}</div>
+              </div>
+              <button
+                onClick={() => toggleActive(u)}
+                className={cx('text-xs font-medium px-2.5 h-8 rounded-full shrink-0',
+                  u.active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500')}
+              >
+                {u.active ? 'Active' : 'Inactive'}
+              </button>
+              <button onClick={() => remove(u)} className="text-gray-400 hover:text-red-600 p-2 -mr-2 shrink-0" aria-label={`Remove ${u.name}`}>
+                <IconTrash />
+              </button>
+            </div>
+          ))}
+        </Card>
+      )}
     </div>
   );
 }

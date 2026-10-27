@@ -2,36 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Bundled so Tamil renders the same offline on every phone (SIL OFL 1.1, Google Noto). */
+@font-face {
+  font-family: 'Noto Sans Tamil';
+  src: url('/fonts/NotoSansTamil.ttf') format('truetype');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 html, body, #root {
   height: 100%;
   margin: 0;
-  background: #f5f7ff;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  color: #1f2440;
+  background: #f6f5f1;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: #17201e;
   /* Prevent iOS/Android rubber-band letting content slide under the notch. */
   overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Safe-area helpers (task 3). Non-zero only with viewport-fit=cover + a device
-   that reports insets; harmless (0px) on desktop and older devices. */
+/* Safe-area helpers. Non-zero only with viewport-fit=cover + a device that
+   reports insets. max() keeps the normal padding where there is no inset —
+   a bare env() here used to zero out px-4 and push the menu button to the edge. */
 .safe-top    { padding-top: env(safe-area-inset-top); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 .safe-x {
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
 }
+.pb-tabbar { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
 
 .tamil {
   font-family: 'Noto Sans Tamil', system-ui, sans-serif;
-  line-height: 1.8;
+  line-height: 1.75;
 }
 
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #c8cfe4; border-radius: 5px; }
-::-webkit-scrollbar-thumb:hover { background: #a3aed0; }
+@media (pointer: fine) {
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #c9d6d2; border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: #9fb5af; }
+}
+
+/* Native-feeling form controls: 16px text stops Android/iOS zooming on focus. */
+input, select, textarea { font-size: 16px; }
+@media (min-width: 768px) { input, select, textarea { font-size: 14px; } }
 
 /* Electron-only: exempt buttons from the draggable title-bar region.
    No-op inside a mobile webview, so it is safe to leave in place. */

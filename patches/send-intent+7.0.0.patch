@@ -1,7 +1,21 @@
 diff --git a/node_modules/send-intent/android/build.gradle b/node_modules/send-intent/android/build.gradle
-index 78bb52f..e09cae4 100644
+index 78bb52f..b5c01f4 100644
 --- a/node_modules/send-intent/android/build.gradle
 +++ b/node_modules/send-intent/android/build.gradle
+@@ -21,11 +21,11 @@ apply plugin: 'com.android.library'
+ 
+ android {
+     namespace "de.mindlib.sendIntent.sendintent"
+-    compileSdkVersion 35
++    compileSdkVersion project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
+ 
+     defaultConfig {
+         minSdkVersion 23
+-        targetSdkVersion 35
++        targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 36
+         versionCode 1
+         versionName "1.0"
+         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 @@ -39,7 +39,7 @@ android {
      buildTypes {
          release {

@@ -6,13 +6,19 @@
 // Contract (matches src/lib/stt.ts):
 //   POST /   { audioBase64, mimeType, language }  ->  { transcript, durationSeconds }
 //
+// Weekly verse feed (matches src/lib/feed.ts) — needs the WEEKS KV binding:
+//   GET  /week                         -> { weeks: [WeekFeed, ...] }  (public; newest first)
+//   PUT  /week   x-admin-key: ADMIN_KEY  body WeekFeed  -> { ok: true }
+//   GET  /admin/check  x-admin-key        -> 200 { ok: true } | 401
+//   WeekFeed = { weekStart: 'YYYY-MM-DD', sendTime: 'HH:MM', publishedAt, verses: [{ slot, book, chapter, verse, text }] }
+//
 // Default vendor: OpenAI Whisper API (good Tamil support). To swap to Google
 // Speech-to-Text or Deepgram, replace the `callVendor` function only.
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, x-stt-secret',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, x-stt-secret, x-admin-key',
 };
 
 function json(body, status = 200) {
@@ -43,6 +49,7 @@ async function callVendor(env, bytes, mimeType, language) {
   form.append('file', new Blob([bytes], { type: mimeType }), `audio.${ext}`);
   form.append('model', model);
   form.append('response_format', 'verbose_json');
+  form.append('temperature', '0'); // deterministic → same audio yields the same transcript/score
   if (language) form.append('language', language);
 
   const r = await fetch(endpoint, {
@@ -58,9 +65,56 @@ async function callVendor(env, bytes, mimeType, language) {
   return { transcript: data.text ?? '', durationSeconds: data.duration ?? 0 };
 }
 
+const WEEK_RE = /^\d{4}-\d{2}-\d{2}$/;
+const KEEP_WEEKS = 4;
+
+function isAdmin(request, env) {
+  return !!env.ADMIN_KEY && request.headers.get('x-admin-key') === env.ADMIN_KEY;
+}
+
+/** Validate + normalise a published week; returns null if malformed. */
+function cleanWeek(body) {
+  if (!body || !WEEK_RE.test(body.weekStart || '') || !Array.isArray(body.verses)) return null;
+  const verses = body.verses.slice(0, 7).map((v) => ({
+    slot: Number(v.slot), book: String(v.book || '').slice(0, 80),
+    chapter: Number(v.chapter), verse: Number(v.verse), text: String(v.text || '').slice(0, 2000),
+  })).filter((v) => v.slot >= 1 && v.slot <= 7 && v.text);
+  const sendTime = /^\d{2}:\d{2}$/.test(body.sendTime || '') ? body.sendTime : '06:00';
+  return { weekStart: body.weekStart, sendTime, publishedAt: new Date().toISOString(), verses };
+}
+
+async function handleFeed(request, env, path) {
+  if (!env.WEEKS) return json({ error: 'WEEKS KV namespace not bound' }, 500);
+  if (path === '/admin/check') return isAdmin(request, env) ? json({ ok: true }) : json({ error: 'Unauthorized' }, 401);
+
+  if (request.method === 'GET') {
+    const index = (await env.WEEKS.get('index', 'json')) || [];
+    const weeks = (await Promise.all(index.map((w) => env.WEEKS.get(`week:${w}`, 'json')))).filter(Boolean);
+    return new Response(JSON.stringify({ weeks }), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60', ...CORS },
+    });
+  }
+  if (request.method === 'PUT') {
+    if (!isAdmin(request, env)) return json({ error: 'Unauthorized' }, 401);
+    let body;
+    try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
+    const week = cleanWeek(body);
+    if (!week) return json({ error: 'Malformed week' }, 400);
+    await env.WEEKS.put(`week:${week.weekStart}`, JSON.stringify(week));
+    const index = (await env.WEEKS.get('index', 'json')) || [];
+    const next = [week.weekStart, ...index.filter((w) => w !== week.weekStart)].sort().reverse();
+    for (const old of next.slice(KEEP_WEEKS)) await env.WEEKS.delete(`week:${old}`);
+    await env.WEEKS.put('index', JSON.stringify(next.slice(0, KEEP_WEEKS)));
+    return json({ ok: true, weekStart: week.weekStart });
+  }
+  return json({ error: 'Method not allowed' }, 405);
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
+    const path = new URL(request.url).pathname.replace(/\/+$/, '');
+    if (path === '/week' || path === '/admin/check') return handleFeed(request, env, path);
     if (request.method !== 'POST') return json({ error: 'POST only' }, 405);
 
     // Optional shared secret: set PROXY_SECRET to require the app to send it.

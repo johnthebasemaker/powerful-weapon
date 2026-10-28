@@ -15,8 +15,8 @@ android {
         applicationId "com.andrewjohnson.powerfulweapon"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 4
-        versionName "0.0.4"
+        versionCode 5
+        versionName "0.0.5"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -41,6 +41,10 @@ android {
             // Upload app/build/outputs/mapping/release/mapping.txt with the AAB if Play asks.
             minifyEnabled true
             shrinkResources true
+            // No native debug symbols here: the only native code is libsqlcipher.so from
+            // @capacitor-community/sqlite, which ships already stripped (AGP: "native debug
+            // metadata has already been stripped"). scripts/build-aab.sh zips the libraries as
+            // native-debug-symbols.zip for a manual Play Console upload instead.
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }

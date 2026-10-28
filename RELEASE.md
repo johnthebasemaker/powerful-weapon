@@ -46,6 +46,11 @@ the matching `.apk` for testing on a phone, and `mapping.txt` (R8 de-obfuscation
 upload it under the release's App bundle explorer if Play shows the warning).
 The script refuses to finish if the bundle is debug-signed.
 
+Play's "no native debug symbols" warning: upload `native-debug-symbols.zip` from the
+same folder under App bundle explorer → (version) → Downloads → Native debug symbols.
+The only native code is the prebuilt, already-stripped `libsqlcipher.so`, so a full
+symbol file doesn't exist; this zip gives function names and clears the warning.
+
 Toolchain (no Android Studio needed): JDK 21 in `~/Library/Java/JavaVirtualMachines`,
 Android SDK in `~/Library/Android/sdk` (platform 36, build-tools 36).
 

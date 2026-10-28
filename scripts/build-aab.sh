@@ -21,6 +21,17 @@ cp "$AAB" "$OUT/PowerfulWeapon-$VER.aab"
 cp android/app/build/outputs/apk/release/app-release.apk "$OUT/PowerfulWeapon-$VER.apk"
 cp android/app/build/outputs/mapping/release/mapping.txt "$OUT/mapping.txt"
 
+# Play Console "no native debug symbols" warning: the only native code is the
+# prebuilt, already-stripped libsqlcipher.so, so AGP can't extract symbols. Zip the
+# libraries per ABI for a manual upload (App bundle explorer → Downloads →
+# Native debug symbols) — enough to name the functions in native crash reports.
+TMP="$(mktemp -d)"
+unzip -q "$AAB" 'base/lib/*' -d "$TMP" 2>/dev/null || true
+if [ -d "$TMP/base/lib" ]; then
+  (cd "$TMP/base/lib" && rm -f "$ROOT/$OUT/native-debug-symbols.zip" && zip -q -r "$ROOT/$OUT/native-debug-symbols.zip" .)
+fi
+rm -rf "$TMP"
+
 # Refuse to hand over a debug-signed bundle (Play rejects it).
 if "$JAVA_HOME/bin/keytool" -printcert -jarfile "$AAB" | grep -q "CN=Android Debug"; then
   echo "❌ Bundle is DEBUG-signed — check android/keystore.properties."; exit 1

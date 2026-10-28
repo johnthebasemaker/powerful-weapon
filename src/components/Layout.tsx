@@ -91,7 +91,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             </NavLink>
           ))}
         </nav>
-        <div className="px-5 py-4 border-t border-white/10 text-xs text-white/40">v0.0.4 · For non-commercial use</div>
+        <div className="px-5 py-4 border-t border-white/10 text-xs text-white/40">v0.0.5 · For non-commercial use</div>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">

@@ -15,7 +15,7 @@ import { toast } from '../lib/toast';
 import { Badge, Button, Card, Field, Input, Notice, PageHeader, SectionTitle, Segmented, Select, dayLabel } from '../components/ui';
 import type { Settings } from '../types';
 
-const APP_VERSION = '0.0.4';
+const APP_VERSION = '0.0.5';
 
 export default function SettingsPage() {
   const { role } = useRole();

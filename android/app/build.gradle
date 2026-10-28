@@ -15,8 +15,8 @@ android {
         applicationId "com.andrewjohnson.powerfulweapon"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "0.1.1"
+        versionCode 4
+        versionName "0.0.4"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -37,7 +37,10 @@ android {
     buildTypes {
         release {
             signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
-            minifyEnabled false
+            // R8: shrink + obfuscate code and drop unused resources (smaller download).
+            // Upload app/build/outputs/mapping/release/mapping.txt with the AAB if Play asks.
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }

@@ -29,6 +29,30 @@ export function normalizeTamil(input: string): string {
   return s;
 }
 
+// Spoken-Tamil folding, used only when grading recitations (never for search,
+// whose normalized text is stored in the verses table). Everyday speech — and
+// Whisper's spelling of it — merges letters that written Tamil keeps apart, so a
+// correctly recited verse should not lose marks for:
+//   ழ/ள/ல  ண/ந/ன  ற/ர  ற்ற→த்த (நேற்று→நேத்து)  ன்ற→ன்ன (என்று→என்னு)
+//   Grantha ஜ/ஷ/ஸ→ச, ஹ→க   long/short vowels   doubled consonants (கனப்பண்ணு/கனபண்ணு)
+const PHONETIC_FOLDS: [RegExp, string][] = [
+  [/ற்ற/g, 'த்த'],
+  [/ன்ற/g, 'ன்ன'],
+  [/ழ/g, 'ல'], [/ள/g, 'ல'],
+  [/[ணந]/g, 'ன'],
+  [/ற/g, 'ர'],
+  [/[ஜஷஸ]/g, 'ச'], [/ஹ/g, 'க'], [/ஞ/g, 'ன'],
+  [/ீ/g, 'ி'], [/ூ/g, 'ு'], [/ே/g, 'ெ'], [/ோ/g, 'ொ'],
+  [/ஈ/g, 'இ'], [/ஊ/g, 'உ'], [/ஏ/g, 'எ'], [/ஓ/g, 'ஒ'],
+  [/([க-ஹ])்\1/g, '$1'],
+];
+
+export function phoneticTamil(input: string): string {
+  let s = normalizeTamil(input);
+  for (const [re, to] of PHONETIC_FOLDS) s = s.replace(re, to);
+  return s;
+}
+
 export function stripSuffix(token: string): string {
   let t = token;
   // Try repeatedly, but cap at 2 passes to avoid over-stripping

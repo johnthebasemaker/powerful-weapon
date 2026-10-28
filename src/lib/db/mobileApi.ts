@@ -12,6 +12,7 @@ import { grade } from '../../../electron/lib/grading';
 import { currentWeekStart as weekStartOf, dateForSlot } from '../dates';
 import { scheduleDailyPostReminder } from '../scheduler';
 import { transcribeViaProxy, getAudioDurationSeconds } from '../stt';
+import { saveTextFile } from '../exportFile';
 
 function todaySlot(date = new Date()): number {
   const d = date.getDay(); // Sun=0..Sat=6 → Mon=1..Sun=7
@@ -53,12 +54,13 @@ const pickedAudio = new Map<string, { base64: string; mimeType: string; name: st
 async function transcribeStoredFile(fileName: string): Promise<{ transcript: string; durationSeconds: number }> {
   const url = await getSetting('stt_proxy_url');
   if (!url) throw new Error(STT_TODO);
+  const secret = await getSetting('stt_proxy_secret');
   const { Filesystem, Directory } = await import('@capacitor/filesystem');
   const read = await Filesystem.readFile({ path: fileName, directory: Directory.Data });
   const base64 = typeof read.data === 'string' ? read.data : '';
   const mime = 'audio/ogg';
   const clientDuration = await getAudioDurationSeconds(`data:${mime};base64,${base64}`);
-  const r = await transcribeViaProxy(url, base64, mime, 'ta');
+  const r = await transcribeViaProxy(url, base64, mime, 'ta', secret || undefined);
   return { transcript: r.transcript, durationSeconds: r.durationSeconds || clientDuration };
 }
 
@@ -261,7 +263,7 @@ export const mobileApi: Window['api'] = {
       const { Filesystem, Directory } = await import('@capacitor/filesystem');
       const fileName = `vn-${Date.now()}-${picked.name.replace(/[^\w.\-]+/g, '_')}`;
       await Filesystem.writeFile({ path: fileName, data: picked.base64, directory: Directory.Data });
-      pickedAudio.delete(srcPath);
+      // Keep the picked audio so a retry after a grading failure still works.
       return { ok: true, path: fileName, size: picked.size };
     },
     pickCsv: async () => null,
@@ -376,7 +378,14 @@ export const mobileApi: Window['api'] = {
         if (!selections.length) return { ok: false, error: 'No verses saved for this week. Go to Verse Picker first.' };
         const { transcript, durationSeconds } = await transcribeStoredFile(payload.filePath);
         const results: any[] = [];
-        const set: { statement: string; values: any[] }[] = [];
+        // Replace any prior grades for this user+week so re-processing the same
+        // note doesn't create duplicate rows with (slightly) different scores.
+        const set: { statement: string; values: any[] }[] = [
+          {
+            statement: 'DELETE FROM voice_notes WHERE user_id = ? AND week_start_date = ?',
+            values: [payload.userId, payload.weekStart],
+          },
+        ];
         for (const sel of selections) {
           const g = grade({
             transcript, referenceText: sel.text_tamil,
@@ -402,7 +411,26 @@ export const mobileApi: Window['api'] = {
 
   backup: {
     pickFolder: async () => null,
-    runNow: async () => ({ ok: false, error: 'On Android, export via the Share sheet (Phase 4).' }),
+    async runNow() {
+      try {
+        const [users, selections, voiceNotes, settings, memoryVerses] = await Promise.all([
+          all('SELECT * FROM users'),
+          all('SELECT * FROM weekly_selections'),
+          all('SELECT * FROM voice_notes'),
+          all('SELECT key, value FROM settings'),
+          all('SELECT book, chapter, verse FROM verses WHERE is_memory_verse = 1'),
+        ]);
+        const payload = {
+          app: 'powerful-weapon', backupVersion: 1, exportedAt: new Date().toISOString(),
+          users, selections, voiceNotes, settings, memoryVerses,
+        };
+        const filename = `powerful-weapon-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        await saveTextFile(filename, JSON.stringify(payload, null, 2), 'application/json');
+        return { ok: true, path: filename };
+      } catch (e: any) {
+        return { ok: false, error: e?.message ?? String(e) };
+      }
+    },
     lastRun: async () => null,
   },
 

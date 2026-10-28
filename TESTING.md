@@ -37,3 +37,39 @@ npm run build:renderer && npx cap sync android
 - **#13 content-URI reading** varies by Android version — if it fails, note the
   toast error; the File Picker path (#12) is the fallback.
 - First launch seeds 31k verses (~a few seconds) — the first data screen may pause.
+
+## 0.0.3 checks (before uploading to Closed testing)
+
+Install the release APK on the phone first (USB debugging on):
+
+```bash
+~/Library/Android/sdk/platform-tools/adb install -r android/app/build/outputs/apk/release/app-release.apk
+```
+
+- [ ] Launcher icon shows the open Bible with வார்த்தை, sharp, not shrunk; splash shows the poster.
+- [ ] Upgrading from 0.0.2 opens straight into admin mode (existing members/verses kept).
+- [ ] Fresh install shows the Welcome screen; "Start receiving daily verses" → Today screen.
+- [ ] Settings → Notifications: Allowed + "Exact time: On time" (tap **Fix** if not). "Send a test", lock the phone → arrives in ~5 s.
+- [ ] Admin: Settings → Members' phones → admin key → **Save & verify** shows Connected; Publish this week succeeds.
+- [ ] Member phone: Today shows the published verse; Settings shows "14 upcoming daily notifications".
+- [ ] Set the time 2 minutes ahead, lock the phone, wait → notification with the Tamil verse arrives on time.
+- [ ] Every tab fits a portrait phone: no sideways scrolling, buttons not cut off, text not squashed.
+- [ ] Voice Inbox: share a WhatsApp voice note → Import + Grade still works (release build uses R8).
+
+## 0.0.4 checks (members recording in the app)
+
+Run `scripts/setup-worker.sh` first, then update the app on two phones through Internal testing.
+
+- [ ] Admin phone: Settings → Admin account → log in with the admin password.
+- [ ] Members → **+ Add** a test member → note the PIN (WhatsApp/Copy buttons work).
+- [ ] Settings → Recording time → set today, a window that is open now → Save.
+- [ ] Second phone: fresh install → "I'm a group member" → pick the name → PIN → Verses shows all 7 verses in full.
+- [ ] Record: Android asks for microphone permission; countdown → verses hidden, no pause button.
+- [ ] While recording, press Home → take is cancelled with a message and counts as a try.
+- [ ] Record again, tap **Next verse** for each verse, Finish → listen → **Send to admin**.
+- [ ] Group tab shows the member as Sent with a play button, no marks.
+- [ ] Admin: Voice → App recordings → play it → **Auto-mark** (per-verse marks + transcripts) → give your own mark.
+- [ ] **Compare engines** (only if the Sarvam key is set) shows both totals.
+- [ ] **Backup** shares the week's audio files (save to Drive).
+- [ ] Not-sent list → **Remind** opens WhatsApp with the message.
+- [ ] Home tab: today's verse and the week's verses are shown in full.

@@ -16,8 +16,8 @@ function ensureContainer(): HTMLDivElement {
     'position:fixed',
     'left:50%',
     'transform:translateX(-50%)',
-    // sit above the Android nav bar / iOS home indicator
-    'bottom:calc(1rem + env(safe-area-inset-bottom))',
+    // sit above the bottom tab bar + Android nav bar / iOS home indicator
+    'bottom:calc(5.75rem + env(safe-area-inset-bottom))',
     'z-index:9999',
     'display:flex',
     'flex-direction:column',
@@ -34,7 +34,7 @@ export type ToastKind = 'info' | 'error' | 'success';
 export function toast(message: string, kind: ToastKind = 'info', ms = 3500): void {
   const root = ensureContainer();
   const el = document.createElement('div');
-  const bg = kind === 'error' ? '#b42318' : kind === 'success' ? '#067647' : '#1f2440';
+  const bg = kind === 'error' ? '#b42318' : kind === 'success' ? '#18614f' : '#0b2421';
   el.style.cssText = [
     `background:${bg}`,
     'color:#fff',

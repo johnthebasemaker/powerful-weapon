@@ -4,6 +4,14 @@ const config: CapacitorConfig = {
   appId: 'com.andrewjohnson.powerfulweapon',
   appName: 'Powerful Weapon',
   webDir: 'dist',
+  backgroundColor: '#0b2421',
+  plugins: {
+    LocalNotifications: {
+      // White silhouette in android/app/src/main/res/drawable/ic_stat_verse.xml
+      smallIcon: 'ic_stat_verse',
+      iconColor: '#1F6158',
+    },
+  },
 };
 
 // Live-reload (DEV ONLY): when CAP_SERVER_URL is set, the app loads from the Vite

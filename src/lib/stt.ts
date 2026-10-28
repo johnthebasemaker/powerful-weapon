@@ -25,13 +25,24 @@ export async function transcribeViaProxy(
   base64: string,
   mimeType: string,
   language = 'ta',
+  secret?: string,
 ): Promise<SttResult> {
-  const res = await fetch(proxyUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ audioBase64: base64, mimeType, language }),
-  });
-  if (!res.ok) throw new Error(`STT proxy returned HTTP ${res.status}`);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (secret) headers['x-stt-secret'] = secret; // matches PROXY_SECRET on the Worker
+  let res: Response;
+  try {
+    res = await fetch(proxyUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ audioBase64: base64, mimeType, language }),
+    });
+  } catch {
+    throw new Error('Could not reach the Speech-to-text proxy. Check the URL in Settings and your internet connection.');
+  }
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`STT proxy error (HTTP ${res.status}). ${detail.slice(0, 140)}`);
+  }
   const data = await res.json();
   return {
     transcript: String(data.transcript ?? ''),

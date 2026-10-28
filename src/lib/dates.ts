@@ -1,15 +1,23 @@
+/** YYYY-MM-DD in the device's local time. (toISOString() is UTC, which is the
+ *  previous calendar day in IST between 00:00 and 05:30.) */
+export function localIso(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
 export function currentWeekStart(date = new Date()): string {
   const d = new Date(date);
   const day = d.getDay();
   const diff = day === 0 ? -6 : 1 - day;
   d.setDate(d.getDate() + diff);
-  return d.toISOString().slice(0, 10);
+  return localIso(d);
 }
 
 export function addDays(iso: string, days: number): string {
   const d = new Date(iso + 'T00:00:00');
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return localIso(d);
 }
 
 export function dateForSlot(weekStart: string, slot: number): string {

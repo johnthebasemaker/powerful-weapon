@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS settings (
 `;
 
 export const DEFAULT_SETTINGS: Record<string, string> = {
-  send_time: '00:00',
+  send_time: '06:00',
   timezone: 'Asia/Kolkata',
   group_name: '',
   backup_folder: '',

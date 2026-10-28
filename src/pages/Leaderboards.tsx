@@ -3,6 +3,9 @@ import { currentWeekStart, yearBounds } from '../lib/dates';
 import { api } from '../lib/api';
 import { saveTextFile } from '../lib/exportFile';
 import type { ConsistencyRow, ScoreRow } from '../types';
+import { addDays } from '../lib/dates';
+import { Button, Card, Empty, PageHeader, Segmented, cx, dayLabel } from '../components/ui';
+import { IconChevronLeft, IconChevronRight, IconUpload } from '../components/icons';
 
 type Tab = 'consistency' | 'weekly' | 'yearly';
 
@@ -41,99 +44,64 @@ export default function Leaderboards() {
     await saveTextFile(filename, csv, 'text/csv');
   }
 
+  const rows: { name: string; main: string; sub: string }[] =
+    tab === 'consistency'
+      ? consistency.map((r) => ({ name: r.name, main: String(r.weeks_present), sub: `weeks · ${r.notes_count} notes` }))
+      : (tab === 'weekly' ? weekly : yearly).map((r) => ({ name: r.name, main: r.avg_score.toFixed(1), sub: `avg · ${r.notes_count} notes` }));
+
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Leaderboards</h1>
-          <p className="text-sm text-gray-500 mt-1">Track consistency and recitation quality.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            value={year}
-            onChange={(e) => setYear(parseInt(e.target.value, 10))}
-            className="w-20 border border-gray-300 rounded-md px-2 py-1.5 text-sm"
-          />
-          {tab === 'weekly' && (
-            <input
-              type="date"
-              value={weekStart}
-              onChange={(e) => setWeekStart(e.target.value)}
-              className="border border-gray-300 rounded-md px-2 py-1.5 text-sm"
-            />
-          )}
-          <button onClick={exportCsv} className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-sm hover:bg-gray-50">
-            Export CSV
-          </button>
-        </div>
-      </header>
+    <div className="space-y-4">
+      <PageHeader
+        title="Leaderboards"
+        subtitle="Consistency and recitation quality."
+        action={<Button variant="secondary" size="sm" onClick={exportCsv}><IconUpload /> Export</Button>}
+      />
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200">
-        {(['consistency', 'weekly', 'yearly'] as Tab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
-              tab === t ? 'border-brand-500 text-brand-700' : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {t === 'consistency' && 'Consistency'}
-            {t === 'weekly' && 'Weekly Scores'}
-            {t === 'yearly' && 'Yearly Scores'}
-          </button>
-        ))}
+      <Segmented<Tab>
+        value={tab}
+        onChange={setTab}
+        options={[{ value: 'consistency', label: 'Consistency' }, { value: 'weekly', label: 'Weekly' }, { value: 'yearly', label: 'Yearly' }]}
+      />
+
+      <div className="flex items-center gap-2">
+        {tab === 'weekly' ? (
+          <>
+            <Button variant="secondary" size="sm" className="w-10 px-0" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label="Previous week"><IconChevronLeft /></Button>
+            <div className="flex-1 text-center text-sm font-medium text-ink">{dayLabel(weekStart)} – {dayLabel(addDays(weekStart, 6))}</div>
+            <Button variant="secondary" size="sm" className="w-10 px-0" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="Next week"><IconChevronRight /></Button>
+          </>
+        ) : (
+          <>
+            <Button variant="secondary" size="sm" className="w-10 px-0" onClick={() => setYear(year - 1)} aria-label="Previous year"><IconChevronLeft /></Button>
+            <div className="flex-1 text-center text-sm font-medium text-ink">{year}</div>
+            <Button variant="secondary" size="sm" className="w-10 px-0" onClick={() => setYear(year + 1)} aria-label="Next year"><IconChevronRight /></Button>
+          </>
+        )}
       </div>
 
-      {/* Tables */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-        {tab === 'consistency' && (
-          <Table
-            headers={['Rank', 'Name', 'Weeks present', 'Voice notes']}
-            rows={consistency.map((r, i) => [String(i + 1), r.name, String(r.weeks_present), String(r.notes_count)])}
-            emptyMsg="No data yet."
-          />
-        )}
-        {tab === 'weekly' && (
-          <Table
-            headers={['Rank', 'Name', 'Avg score', 'Voice notes']}
-            rows={weekly.map((r, i) => [String(i + 1), r.name, r.avg_score.toFixed(1), String(r.notes_count)])}
-            emptyMsg="No graded notes in this week."
-          />
-        )}
-        {tab === 'yearly' && (
-          <Table
-            headers={['Rank', 'Name', 'Avg score', 'Voice notes']}
-            rows={yearly.map((r, i) => [String(i + 1), r.name, r.avg_score.toFixed(1), String(r.notes_count)])}
-            emptyMsg="No graded notes this year."
-          />
-        )}
-      </div>
+      {rows.length === 0 ? (
+        <Empty icon="🏆" title="No data yet">
+          {tab === 'consistency' ? 'Graded voice notes will appear here.' : tab === 'weekly' ? 'No graded notes in this week.' : 'No graded notes this year.'}
+        </Empty>
+      ) : (
+        <Card pad={false} className="divide-y divide-gray-100 overflow-hidden">
+          {rows.map((r, i) => (
+            <div key={i} className={cx('flex items-center gap-3 px-4 py-3', i < 3 && 'bg-gold-100/30')}>
+              <span className={cx(
+                'w-8 h-8 rounded-full grid place-items-center text-sm font-bold shrink-0',
+                i === 0 ? 'bg-gold-400 text-brand-950' : i === 1 ? 'bg-gray-200 text-gray-700' : i === 2 ? 'bg-amber-200 text-amber-900' : 'text-gray-500',
+              )}>
+                {i + 1}
+              </span>
+              <span className="flex-1 min-w-0 text-[15px] font-medium truncate">{r.name}</span>
+              <span className="text-right shrink-0">
+                <span className="block text-base font-bold text-brand-800 leading-tight">{r.main}</span>
+                <span className="block text-[11px] text-gray-500">{r.sub}</span>
+              </span>
+            </div>
+          ))}
+        </Card>
+      )}
     </div>
-  );
-}
-
-function Table({ headers, rows, emptyMsg }: { headers: string[]; rows: string[][]; emptyMsg: string }) {
-  if (rows.length === 0) {
-    return <div className="text-center text-gray-400 py-10 text-sm">{emptyMsg}</div>;
-  }
-  return (
-    <table className="w-full text-sm">
-      <thead className="bg-gray-50 text-gray-600 text-left">
-        <tr>{headers.map((h, i) => <th key={i} className="px-4 py-2 font-medium">{h}</th>)}</tr>
-      </thead>
-      <tbody className="divide-y divide-gray-100">
-        {rows.map((r, i) => (
-          <tr key={i} className={i < 3 ? 'bg-amber-50/40' : ''}>
-            {r.map((c, j) => (
-              <td key={j} className={`px-4 py-2 ${j === 0 ? 'font-semibold w-16' : ''}`}>
-                {j === 0 && i < 3 ? ['🥇', '🥈', '🥉'][i] + ' ' + c : c}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }

@@ -44,9 +44,59 @@ npm run dev
 
 An open proxy could let strangers spend your OpenAI credits. Two easy guards:
 - **Shared secret:** `npx wrangler secret put PROXY_SECRET` (a long random string).
-  The Worker then requires header `x-stt-secret`. (Add that header in
-  `src/lib/stt.ts`'s fetch to use it.)
+  The Worker then requires header `x-stt-secret`; enter the same value in the app
+  under Settings → Voice grading → Proxy secret.
 - **Cloudflare rate limiting / WAF** on the Worker route.
+
+## Weekly verse feed for members' phones (app 0.0.3+)
+
+The same Worker also stores the week's 7 verses so members' phones can show the
+real verse in their daily notification. It holds **only** Bible verses and the
+send time — no names or phone numbers.
+
+One-time setup (from this `stt-proxy/` folder):
+
+```bash
+npx wrangler kv namespace create WEEKS
+```
+
+Copy the `id` it prints into `wrangler.toml` (replace `REPLACE_WITH_WEEKS_NAMESPACE_ID`). Then:
+
+```bash
+npx wrangler secret put ADMIN_KEY
+```
+
+Type a long private password — only the admin's phone needs it. Then deploy:
+
+```bash
+npm run deploy
+```
+
+In the admin's app: Settings → Members' phones → paste the same admin key →
+**Save & verify**. From then on, saving a week in the Verse Picker publishes it.
+
+Endpoints: `GET /week` (public, newest 4 weeks) · `PUT /week` and
+`GET /admin/check` (need header `x-admin-key`).
+
+## Members, in-app recordings and scores (app 0.0.4+)
+
+The Worker also stores members (name + hashed PIN), their weekly recordings and
+the admin's marks in a free **D1** database, and deletes audio after 8 weeks
+(daily cron). Run the whole setup in one go from the project folder:
+
+```bash
+scripts/setup-worker.sh
+```
+
+It creates the D1 database, asks you for the **admin password** (secret
+`ADMIN_PASSWORD` — the admin types it in the app; only you can change it, by
+re-running the script) and optionally a **Sarvam** key (`SARVAM_API_KEY`) to
+compare Sarvam with Whisper, then deploys. Changing the admin password signs the
+admin out of every phone.
+
+Members log in with their name and the 4-digit PIN the admin gives them; 5 wrong
+PINs lock that member for 15 minutes, 10 wrong admin passwords lock admin login
+for 15 minutes.
 
 ## Swapping the STT vendor
 

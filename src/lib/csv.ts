@@ -1,3 +1,4 @@
+import { localIso } from './dates';
 // Tiny CSV parser — handles quoted fields, commas inside quotes, CRLF.
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
@@ -59,7 +60,7 @@ export function parseUsersCsv(text: string): { rows: CsvUserRow[]; errors: strin
       errors.push(`Row ${i + 1}: missing name or phone`);
       continue;
     }
-    rows.push({ name, phone, joined_date: joined || new Date().toISOString().slice(0, 10) });
+    rows.push({ name, phone, joined_date: joined || localIso(new Date()) });
   }
   return { rows, errors };
 }

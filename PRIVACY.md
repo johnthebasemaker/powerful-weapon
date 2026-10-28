@@ -7,10 +7,13 @@ choose weekly memory verses and grade members' recitation voice notes; group
 members use it to receive the daily verse as a notification.
 
 ## What the app stores
-All app data is stored **on the administrator's device** (a local database):
+The administrator's working data is stored **on the administrator's device** (a local database):
 - Member names, phone numbers, and join dates (entered by the administrator).
 - Imported voice-note recordings and their transcripts and scores.
 - Weekly verse selections and app settings.
+
+Members' app logins, their weekly voice recordings, the administrator's marks and the
+weekly verses are stored on the group's server — see the sections below.
 
 The app does **not** contain advertising or third-party analytics/tracking SDKs.
 

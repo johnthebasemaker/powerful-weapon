@@ -6,9 +6,22 @@ compatibility_date = "2024-11-01"
 #   npx wrangler secret put STT_API_KEY    # Groq key
 #   npx wrangler secret put PROXY_SECRET   # optional
 #   npx wrangler secret put ADMIN_KEY      # required to publish the weekly verses
+#   npx wrangler secret put ADMIN_PASSWORD # admin login in the app (falls back to ADMIN_KEY); only you can change it
+#   npx wrangler secret put SARVAM_API_KEY # optional: Sarvam speech-to-text for comparison
 
 # Weekly verse feed for members' phones. Create once, then paste the id here:
 #   npx wrangler kv namespace create WEEKS
 [[kv_namespaces]]
 binding = "WEEKS"
 id = "1ebf566b9d5b4a0fa655978f8445d518"
+
+# Members, in-app recordings and scores. Create once, then paste the id:
+#   npx wrangler d1 create powerful-weapon
+[[d1_databases]]
+binding = "DB"
+database_name = "powerful-weapon"
+database_id = "1bed98f5-c3c8-4cfa-a43d-5dd3bc557fed"
+
+# Daily clean-up: delete recordings older than 8 weeks (03:30 IST).
+[triggers]
+crons = ["0 22 * * *"]

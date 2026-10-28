@@ -45,7 +45,7 @@ export async function cachedFeed(): Promise<WeekFeed[]> {
 /** Download the latest weeks; falls back to the cached copy when offline. */
 export async function refreshFeed(): Promise<{ weeks: WeekFeed[]; fromCache: boolean; error?: string }> {
   try {
-    const res = await fetchWithTimeout(`${await feedUrl()}/week`);
+    const res = await fetchWithTimeout(`${await feedUrl()}/week`, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as { weeks?: WeekFeed[] };
     const weeks = Array.isArray(data.weeks) ? data.weeks : [];
@@ -79,8 +79,9 @@ export interface PublishResult { ok: boolean; error?: string }
 
 /** Push one week's saved selections to the members' feed. */
 export async function publishWeek(weekStart: string): Promise<PublishResult> {
+  const token = await setting('admin_token');
   const key = await setting('admin_key');
-  if (!key) return { ok: false, error: 'Add your admin key in Settings → Members feed first.' };
+  if (!token && !key) return { ok: false, error: 'Log in as admin first (Settings → Admin account).' };
   const sels = (await api().selections.get(weekStart)) as any[];
   if (!sels.length) return { ok: false, error: 'No verses saved for that week yet.' };
   const body = {
@@ -91,10 +92,10 @@ export async function publishWeek(weekStart: string): Promise<PublishResult> {
   try {
     const res = await fetchWithTimeout(`${await feedUrl()}/week`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'x-admin-key': key },
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : { 'x-admin-key': key }) },
       body: JSON.stringify(body),
     });
-    if (res.status === 401) return { ok: false, error: 'Admin key was not accepted. Check it in Settings → Members feed.' };
+    if (res.status === 401) return { ok: false, error: 'Admin login expired. Log in again in Settings → Admin account.' };
     if (!res.ok) return { ok: false, error: `Feed error (HTTP ${res.status}).` };
     await api().settings.set('last_published', JSON.stringify({ weekStart, at: new Date().toISOString() }));
     return { ok: true };

@@ -2,17 +2,20 @@ import { ReactNode, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { api } from '../lib/api';
-import { checkAdminKey, DEFAULT_FEED_URL, lastPublished, publishWeek, refreshFeed } from '../lib/feed';
+import { DEFAULT_FEED_URL, lastPublished, publishWeek, refreshFeed } from '../lib/feed';
+import { fmtWhen, getConfig, loginAdmin, logoutAdmin, RecordConfig, saveConfig, scorePairs } from '../lib/remote';
+import { Calibration, fitCalibration } from '../lib/autoMark';
+import AdminGate from '../components/AdminGate';
 import { currentWeekStart } from '../lib/dates';
 import { isNative } from '../lib/platform';
 import { useRole } from '../lib/role';
 import { exactAlarmStatus, memberTime, refreshNotifications, requestExactAlarm, syncAndSchedule } from '../lib/scheduler';
 import { cachedFeed } from '../lib/feed';
 import { toast } from '../lib/toast';
-import { Badge, Button, Card, Field, Input, Notice, PageHeader, SectionTitle, dayLabel } from '../components/ui';
+import { Badge, Button, Card, Field, Input, Notice, PageHeader, SectionTitle, Segmented, Select, dayLabel } from '../components/ui';
 import type { Settings } from '../types';
 
-const APP_VERSION = '0.0.3';
+const APP_VERSION = '0.0.4';
 
 export default function SettingsPage() {
   const { role } = useRole();
@@ -91,7 +94,9 @@ function AdminSettings() {
         )}
       </Card>
 
-      <MembersFeedCard settings={settings} setKey={setKey} />
+      <AdminAccountCard />
+      <AdminGate what="set the recording time"><RecordingWindowCard /></AdminGate>
+      <MarkingCard />
 
       {isNative() && <NotificationsCard />}
 
@@ -152,26 +157,17 @@ function AdminSettings() {
   );
 }
 
-function MembersFeedCard({ settings, setKey }: { settings: Settings; setKey: (k: string, v: string) => Promise<void> }) {
-  const [key, setKeyInput] = useState('');
-  const [url, setUrl] = useState('');
-  const [advanced, setAdvanced] = useState(false);
+function AdminAccountCard() {
+  const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [published, setPublished] = useState<{ weekStart: string; at: string } | null>(null);
+  const [url, setUrl] = useState('');
+  const [advanced, setAdvanced] = useState(false);
 
-  useEffect(() => { setKeyInput(settings.admin_key ?? ''); setUrl(settings.feed_url ?? ''); }, [settings.admin_key, settings.feed_url]);
-  useEffect(() => { lastPublished().then(setPublished); }, []);
-
-  async function saveKey() {
-    setBusy(true);
-    await setKey('feed_url', url.trim());
-    const ok = key.trim() ? await checkAdminKey(key.trim()) : false;
-    setBusy(false);
-    if (!key.trim()) { await setKey('admin_key', ''); toast('Admin key removed', 'info'); return; }
-    if (!ok) { toast('That admin key was not accepted by the feed', 'error', 5000); return; }
-    await setKey('admin_key', key.trim());
-    toast('Admin key verified', 'success');
-  }
+  useEffect(() => {
+    api().settings.getAll().then((s: any) => { setLoggedIn(!!s.admin_token); setUrl(s.feed_url ?? ''); });
+    lastPublished().then(setPublished);
+  }, []);
 
   async function publishNow() {
     setBusy(true);
@@ -183,30 +179,126 @@ function MembersFeedCard({ settings, setKey }: { settings: Settings; setKey: (k:
 
   return (
     <Card className="space-y-3">
-      <SectionTitle action={settings.admin_key ? <Badge tone="green">Connected</Badge> : <Badge tone="amber">Not set</Badge>}>
-        Members' phones
+      <SectionTitle action={loggedIn ? <Badge tone="green">Logged in</Badge> : <Badge tone="amber">Not logged in</Badge>}>
+        Admin account
       </SectionTitle>
-      <p className="text-sm text-gray-600 leading-relaxed">
-        Members install this app and choose “Start receiving daily verses”. When you save a week, its 7 verses are sent to
-        their phones and shown in the daily notification. Only the verses and send time are shared — no names or numbers.
-      </p>
-      <Field label="Admin key" hint="The ADMIN_KEY you set on your Cloudflare Worker. Keep it private.">
-        <Input type="password" value={key} onChange={(e) => setKeyInput(e.target.value)} placeholder="Paste admin key" autoComplete="off" />
-      </Field>
+      {loggedIn === false && (
+        <AdminGate what="manage members, recordings and the verse feed"><span /></AdminGate>
+      )}
+      {loggedIn && (
+        <>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            Saving a week in the Verse Picker sends its 7 verses to members' phones. The admin password can only be
+            changed by the app owner on the server.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Button onClick={publishNow} disabled={busy}>Publish this week</Button>
+            <Button variant="secondary" onClick={async () => { await logoutAdmin(); setLoggedIn(false); }}>Log out</Button>
+          </div>
+          {published && (
+            <p className="text-xs text-gray-500">Last published: week of {dayLabel(published.weekStart)} · {new Date(published.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+          )}
+        </>
+      )}
       {advanced ? (
-        <Field label="Feed URL" hint="Leave blank to use the group's default Worker.">
-          <Input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder={DEFAULT_FEED_URL} />
+        <Field label="Server URL" hint="Leave blank for the group's default Worker.">
+          <Input type="url" value={url} placeholder={DEFAULT_FEED_URL} onChange={(e) => setUrl(e.target.value)}
+            onBlur={() => api().settings.set('feed_url', url.trim())} />
         </Field>
       ) : (
-        <button className="text-xs text-brand-700 font-medium" onClick={() => setAdvanced(true)}>Advanced: change feed URL</button>
+        <button className="text-xs text-brand-700 font-medium" onClick={() => setAdvanced(true)}>Advanced: server URL</button>
       )}
-      <div className="grid grid-cols-2 gap-2">
-        <Button variant="secondary" onClick={saveKey} disabled={busy}>Save & verify</Button>
-        <Button onClick={publishNow} disabled={busy || !settings.admin_key}>Publish this week</Button>
-      </div>
-      {published && (
-        <p className="text-xs text-gray-500">Last published: week of {dayLabel(published.weekStart)} · {new Date(published.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+    </Card>
+  );
+}
+
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+function RecordingWindowCard() {
+  const [cfg, setCfg] = useState<RecordConfig | null>(null);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { getConfig().then(setCfg).catch((e) => setError(e.message)); }, []);
+
+  async function save() {
+    if (!cfg) return;
+    setSaving(true);
+    try {
+      const { window: _w, ...rest } = cfg;
+      setCfg(await saveConfig(rest));
+      toast('Recording time saved', 'success');
+    } catch (e: any) { toast(e.message, 'error', 5000); } finally { setSaving(false); }
+  }
+
+  const set = (k: keyof RecordConfig, v: string) => cfg && setCfg({ ...cfg, [k]: v });
+  const ext = Number(cfg?.extend_days ?? 0);
+  const lastDay = cfg ? DAYS[(Number(cfg.record_dow) - 1 + ext) % 7] : '';
+
+  return (
+    <Card className="space-y-4">
+      <SectionTitle>Recording time</SectionTitle>
+      {error && <p className="text-sm text-red-700">{error}</p>}
+      {cfg && (
+        <>
+          <p className="text-sm text-gray-600">Weeks start on Monday. Members can record only inside this window.</p>
+          <Field label="Recording day">
+            <Select value={cfg.record_dow} onChange={(e) => set('record_dow', e.target.value)}>
+              {DAYS.map((d, i) => <option key={d} value={String(i + 1)}>{d}{i === 6 ? ' (last day of the week)' : ''}</option>)}
+            </Select>
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Opens at"><Input type="time" value={cfg.record_from} onChange={(e) => set('record_from', e.target.value)} /></Field>
+            <Field label="Closes at"><Input type="time" value={cfg.record_to} onChange={(e) => set('record_to', e.target.value)} /></Field>
+          </div>
+          <Field label="Extra days" hint={ext ? `Stays open until ${lastDay} at the closing time.` : 'Closes the same day.'}>
+            <Segmented value={cfg.extend_days} onChange={(v) => set('extend_days', v)}
+              options={[{ value: '0', label: 'None' }, { value: '1', label: '+1 day' }, { value: '2', label: '+2 days' }]} />
+          </Field>
+          <Field label="Tries per member">
+            <Segmented value={cfg.max_takes} onChange={(v) => set('max_takes', v)}
+              options={['1', '2', '3', '4', '5'].map((n) => ({ value: n, label: n }))} />
+          </Field>
+          <Notice tone={cfg.window.open ? 'ok' : 'info'}>
+            {cfg.window.open ? `Open now — closes ${fmtWhen(cfg.window.closesAt)}` : `Next: ${fmtWhen(cfg.window.opensAt)} → ${fmtWhen(cfg.window.closesAt)}`}
+          </Notice>
+          <Button block onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save recording time'}</Button>
+        </>
       )}
+    </Card>
+  );
+}
+
+function MarkingCard() {
+  const [engine, setEngine] = useState('whisper');
+  const [useCalib, setUseCalib] = useState(true);
+  const [calib, setCalib] = useState<Calibration | null>(null);
+  const [pairs, setPairs] = useState(0);
+
+  useEffect(() => {
+    api().settings.getAll().then((s: any) => { setEngine(s.mark_engine || 'whisper'); setUseCalib(s.use_calibration !== 'false'); });
+    scorePairs().then((p) => { setPairs(p.length); setCalib(fitCalibration(p)); }).catch(() => {});
+  }, []);
+
+  return (
+    <Card className="space-y-3">
+      <SectionTitle>Auto-marking</SectionTitle>
+      <Field label="Speech engine" hint="Whisper is free (Groq). Sarvam is built for Indian languages — needs SARVAM_API_KEY on the Worker. Use “Compare engines” on a recording to decide.">
+        <Select value={engine} onChange={async (e) => { setEngine(e.target.value); await api().settings.set('mark_engine', e.target.value); }}>
+          <option value="whisper">Whisper large-v3 (Groq)</option>
+          <option value="sarvam">Sarvam Saaras</option>
+        </Select>
+      </Field>
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" className="w-5 h-5 mt-0.5 accent-brand-600" checked={useCalib}
+          onChange={async (e) => { setUseCalib(e.target.checked); await api().settings.set('use_calibration', e.target.checked ? 'true' : 'false'); }} />
+        <span>Learn from my marks — adjust auto marks to match how I mark.</span>
+      </label>
+      <p className="text-xs text-gray-500">
+        {calib
+          ? `Learnt from ${calib.n} recordings you marked: average gap ${calib.maeBefore.toFixed(1)} → ${calib.maeAfter.toFixed(1)} points.`
+          : `Give your own mark to ${Math.max(0, 8 - pairs)} more auto-marked recording${8 - pairs === 1 ? '' : 's'} to start learning (${pairs}/8).`}
+      </p>
     </Card>
   );
 }
@@ -289,6 +381,7 @@ function MemberSettings() {
         <Button variant="secondary" block onClick={refreshNow} disabled={refreshing}>{refreshing ? 'Updating…' : 'Update verses now'}</Button>
       </Card>
 
+      <MemberAccountCard name={settings.member_name} />
       {isNative() && <SwitchModeCard to="admin" />}
       <About />
     </div>
@@ -368,6 +461,17 @@ function NotificationsCard() {
   );
 }
 
+function MemberAccountCard({ name }: { name?: string }) {
+  const { signOutMember } = useRole();
+  return (
+    <Card>
+      <SectionTitle>Account</SectionTitle>
+      <p className="text-sm text-gray-600 mb-3">Logged in as <strong>{name || 'member'}</strong>.</p>
+      <Button variant="secondary" block onClick={async () => { if (confirm('Log out of this phone?')) await signOutMember(); }}>Log out</Button>
+    </Card>
+  );
+}
+
 function StatusRow({ label, ok, okText, badText, action }: { label: string; ok: boolean; okText: string; badText: string; action?: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3">
@@ -383,22 +487,42 @@ function StatusRow({ label, ok, okText, badText, action }: { label: string; ok: 
 function SwitchModeCard({ to }: { to: 'admin' | 'member' }) {
   const { setRole } = useRole();
   const navigate = useNavigate();
-  async function go() {
-    const msg = to === 'admin'
-      ? 'Switch to admin mode? This is only for the person who picks the verses and grades voice notes.'
-      : 'Switch this phone to member mode? You will only see the daily verse. Your admin data stays on the phone.';
-    if (!confirm(msg)) return;
+  const [asking, setAsking] = useState(false);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  async function finish() {
     await setRole(to);
     syncAndSchedule().catch(() => {});
     navigate(to === 'admin' ? '/dashboard' : '/today', { replace: true });
   }
+
+  async function go() {
+    if (to === 'admin') { setAsking(true); return; }
+    if (!confirm('Switch this phone to member mode? You will need a member name and PIN. Your admin data stays on the phone.')) return;
+    await finish();
+  }
+
+  async function confirmAdmin() {
+    setError('');
+    try { await loginAdmin(password); await finish(); } catch (e: any) { setError(e.message); }
+  }
+
   return (
     <Card>
       <SectionTitle>App mode</SectionTitle>
       <p className="text-sm text-gray-600 mb-3">
         {to === 'admin' ? 'This phone is in member mode.' : 'This phone is in admin mode.'}
       </p>
-      <Button variant="secondary" block onClick={go}>{to === 'admin' ? "I'm the group admin" : 'Switch to member mode'}</Button>
+      {asking ? (
+        <div className="space-y-2">
+          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Admin password" />
+          {error && <p className="text-sm text-red-700">{error}</p>}
+          <Button block disabled={!password} onClick={confirmAdmin}>Switch to admin</Button>
+        </div>
+      ) : (
+        <Button variant="secondary" block onClick={go}>{to === 'admin' ? "I'm the group admin" : 'Switch to member mode'}</Button>
+      )}
     </Card>
   );
 }

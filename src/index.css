@@ -46,6 +46,9 @@ html, body, #root {
   ::-webkit-scrollbar-thumb:hover { background: #9fb5af; }
 }
 
+/* While a member is recording, nothing else is reachable (no tab bar). */
+body[data-recording="1"] .tabbar { display: none; }
+
 /* Native-feeling form controls: 16px text stops Android/iOS zooming on focus. */
 input, select, textarea { font-size: 16px; }
 @media (min-width: 768px) { input, select, textarea { font-size: 14px; } }

@@ -52,4 +52,9 @@
          Settings → Apps → Special access → Alarms & reminders on Android 12+).
          Without it the plugin falls back to an inexact wake-up alarm. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Members record their weekly recitation inside the app. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Recording is optional (admins, tablets) — don't hide the app from devices without a mic. -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 </manifest>

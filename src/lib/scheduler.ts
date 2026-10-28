@@ -6,6 +6,7 @@ import { api } from './api';
 import { addDays, currentWeekStart, localIso } from './dates';
 import { cachedFeed, refreshFeed, verseFor, WeekFeed } from './feed';
 import { isNative } from './platform';
+import { getConfig, myStatus } from './remote';
 
 // Daily verse notifications (Android).
 //
@@ -125,9 +126,35 @@ export async function refreshNotifications(): Promise<RefreshResult | null> {
     }
   }
 
+  list.push(...windowNotifications(settings, role, now));
+
   await cancelAll();
   if (list.length) await LocalNotifications.schedule({ notifications: list });
   return { scheduled: list.length, withVerse, permission: perm, time };
+}
+
+/** Recording-window alerts from the cached server config (see syncAndSchedule). */
+function windowNotifications(settings: Record<string, string>, role: string, now: number): LocalNotificationSchema[] {
+  let w: { weekStart: string; opensAt: number; closesAt: number } | undefined;
+  try { w = JSON.parse(settings.record_cfg || '{}').window; } catch { return []; }
+  if (!w?.opensAt) return [];
+  const sent = settings.record_sent_week === w.weekStart;
+  const at = (ms: number) => ({ at: new Date(ms), allowWhileIdle: true });
+  const base = { channelId: CHANNEL_ID, smallIcon: 'ic_stat_verse', iconColor: '#1F6158' };
+  const out: LocalNotificationSchema[] = [];
+  const close = new Date(w.closesAt).toLocaleString('en-IN', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+  if (role === 'member' && !sent) {
+    if (w.opensAt > now + 30_000) out.push({ ...base, id: 1100, schedule: at(w.opensAt), title: 'Recording time is open 🎙️',
+      body: `Recite this week's 7 verses from memory and send them before ${close}.`, extra: { action: 'open-record' } });
+    const remind = w.closesAt - 2 * 3600_000;
+    if (remind > now + 30_000) out.push({ ...base, id: 1101, schedule: at(remind), title: '2 hours left to send your recording',
+      body: `Recording closes ${close}.`, extra: { action: 'open-record' } });
+  }
+  if (role === 'admin' && w.closesAt > now + 30_000) {
+    out.push({ ...base, id: 1102, schedule: at(w.closesAt), title: 'Recording time closed',
+      body: "Open Voice → App recordings to mark this week's recordings.", extra: { action: 'open-recordings' } });
+  }
+  return out;
 }
 
 async function cancelAll(): Promise<void> {
@@ -142,6 +169,15 @@ export async function syncAndSchedule(): Promise<RefreshResult | null> {
   if (!isNative()) return null;
   const s = (await api().settings.getAll()) as Record<string, string>;
   if (s.app_role === 'member') await refreshFeed();
+  // Cache the recording window (and whether this member already sent) for offline scheduling.
+  try {
+    const cfg = await getConfig();
+    await api().settings.set('record_cfg', JSON.stringify(cfg));
+    if (s.app_role === 'member' && s.member_token) {
+      const st = await myStatus();
+      await api().settings.set('record_sent_week', st.sent ? st.window.weekStart : '');
+    }
+  } catch { /* offline: keep the last cached window */ }
   return refreshNotifications();
 }
 
@@ -179,6 +215,8 @@ export function useNotifications(): void {
       const action = event.notification.extra?.action;
       if (action === 'post-verse') navigate('/dashboard');
       else if (action === 'open-today') navigate('/today');
+      else if (action === 'open-record') navigate('/record');
+      else if (action === 'open-recordings') navigate('/voice-inbox');
     }).then((h) => subs.push(h));
     App.addListener('appStateChange', ({ isActive }) => {
       if (isActive) syncAndSchedule().catch(() => {});

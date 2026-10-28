@@ -35,4 +35,5 @@ export const IconBattery = () => <I><rect x="2.5" y="7" width="17" height="10" r
 export const IconShield = () => <I><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6l8-3z" /></I>;
 export const IconChevronLeft = () => <I><path d="M15 6l-6 6 6 6" /></I>;
 export const IconChevronRight = () => <I><path d="M9 6l6 6-6 6" /></I>;
+export const IconBrain = () => <I><path d="M9 4a3 3 0 00-3 3v.3A3 3 0 004 10a3 3 0 001 2.2A3.5 3.5 0 006.5 18H9V4zM15 4a3 3 0 013 3v.3A3 3 0 0120 10a3 3 0 01-1 2.2A3.5 3.5 0 0117.5 18H15V4z" /><path d="M9 18v2M15 18v2M9 9H7.5M15 9h1.5M9 13.5H7M15 13.5h2" /></I>;
 export const IconTrash = () => <I size={18}><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></I>;

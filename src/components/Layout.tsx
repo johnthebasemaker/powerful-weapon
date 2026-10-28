@@ -4,7 +4,7 @@ import { useRole } from '../lib/role';
 import ErrorBoundary from './ErrorBoundary';
 import { cx } from './ui';
 import {
-  IconBook, IconCalendar, IconHome, IconMic, IconMore, IconSettings, IconTrophy, IconUsers,
+  IconBook, IconBrain, IconHome, IconMic, IconMore, IconSettings, IconTrophy, IconUsers,
 } from './icons';
 
 interface NavItem { to: string; label: string; icon: () => JSX.Element; match?: string[] }
@@ -22,16 +22,18 @@ const ADMIN_SIDEBAR: NavItem[] = [
   { to: '/users', label: 'Members', icon: IconUsers },
   { to: '/settings', label: 'Settings', icon: IconSettings },
 ];
+// Members get a deliberately small app: study, practise, record, see who sent.
 const MEMBER_TABS: NavItem[] = [
-  { to: '/today', label: 'Today', icon: IconHome },
-  { to: '/week', label: 'This week', icon: IconCalendar },
-  { to: '/settings', label: 'Settings', icon: IconSettings },
+  { to: '/today', label: 'Verses', icon: IconBook },
+  { to: '/practice', label: 'Practice', icon: IconBrain },
+  { to: '/record', label: 'Record', icon: IconMic },
+  { to: '/group', label: 'Group', icon: IconUsers },
 ];
 
 const TITLES: Record<string, string> = {
   '/dashboard': 'Home', '/verses': 'Verse Picker', '/voice-inbox': 'Voice Inbox',
   '/leaderboards': 'Leaderboards', '/more': 'More', '/users': 'Members', '/settings': 'Settings',
-  '/today': "Today's verse", '/week': 'This week',
+  '/today': 'Verses', '/practice': 'Practice', '/record': 'Record', '/group': 'Group',
 };
 
 /** Hide the bottom bar while the on-screen keyboard is up (it would ride on top of it). */
@@ -63,7 +65,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const loc = useLocation();
   const keyboardOpen = useKeyboardOpen();
   const tabs = role === 'member' ? MEMBER_TABS : ADMIN_TABS;
-  const sidebar = role === 'member' ? MEMBER_TABS : ADMIN_SIDEBAR;
+  const sidebar = role === 'member' ? [...MEMBER_TABS, { to: '/settings', label: 'Settings', icon: IconSettings }] : ADMIN_SIDEBAR;
   const title = TITLES[loc.pathname] ?? '';
 
   // Scroll to top on tab change (the scroller is <main>, not the window).
@@ -89,7 +91,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             </NavLink>
           ))}
         </nav>
-        <div className="px-5 py-4 border-t border-white/10 text-xs text-white/40">v0.0.3 · For non-commercial use</div>
+        <div className="px-5 py-4 border-t border-white/10 text-xs text-white/40">v0.0.4 · For non-commercial use</div>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -97,7 +99,9 @@ export default function Layout({ children }: { children: ReactNode }) {
         <header className="md:hidden bg-brand-900 safe-top shadow-lift z-20">
           <div className="safe-x h-14 flex items-center justify-between gap-3">
             <Brand compact />
-            {title && <span className="text-xs text-white/60 truncate">{title}</span>}
+            {role === 'member' ? (
+              <NavLink to="/settings" aria-label="Settings" className="w-10 h-10 -mr-2 grid place-items-center text-white/80"><IconSettings /></NavLink>
+            ) : title && <span className="text-xs text-white/60 truncate">{title}</span>}
           </div>
         </header>
 
@@ -107,7 +111,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
         {/* Phone bottom tab bar */}
         {!keyboardOpen && (
-          <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-black/5 safe-bottom">
+          <nav className="tabbar md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-black/5 safe-bottom">
             <div className="flex">
               {tabs.map((item) => {
                 const active = (item.match ?? [item.to]).includes(loc.pathname);

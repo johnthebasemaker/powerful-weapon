@@ -107,7 +107,7 @@ export default function Dashboard() {
             <span className="inline-block mt-3 rounded-full bg-gold-400 text-brand-950 text-xs font-semibold px-2.5 py-1">
               {today.book} {today.chapter}:{today.verse}
             </span>
-            <p className="tamil text-[17px] mt-3 text-white/95 line-clamp-5" style={{ lineHeight: 1.8 }}>{today.text_tamil}</p>
+            <p className="tamil text-[17px] mt-3 text-white/95" style={{ lineHeight: 1.8 }}>{today.text_tamil}</p>
             {!today.posted_at && (
               <div className="grid grid-cols-2 gap-2 mt-4">
                 <Button variant="gold" onClick={() => post(today)}><IconSend /> Post</Button>
@@ -156,7 +156,7 @@ export default function Dashboard() {
                   <Badge tone="amber">Pending</Badge>
                 </div>
                 <div className="text-sm font-semibold mt-1">{p.book} {p.chapter}:{p.verse}</div>
-                <div className="tamil text-sm text-gray-700 line-clamp-2">{p.text_tamil}</div>
+                <div className="tamil text-sm text-gray-700" style={{ lineHeight: 1.75 }}>{p.text_tamil}</div>
                 <div className="grid grid-cols-2 gap-2 mt-3">
                   <Button size="sm" onClick={() => post(p)}><IconSend /> Post</Button>
                   <Button size="sm" variant="secondary" onClick={() => markSent(p.slot)}><IconCheck /> Mark sent</Button>
@@ -178,15 +178,15 @@ export default function Dashboard() {
               const slot = i + 1;
               const sel = selections.find((s) => s.slot === slot);
               return (
-                <div key={slot} className={cx('px-4 py-3 flex items-center gap-3', slot === todaySlot && 'bg-gold-100/40')}>
-                  <div className="w-11 shrink-0 text-center">
+                <div key={slot} className={cx('px-4 py-3 flex items-start gap-3', slot === todaySlot && 'bg-gold-100/40')}>
+                  <div className="w-11 shrink-0 text-center pt-0.5">
                     <div className="text-xs font-semibold text-gray-700">{weekdayLabel(slot)}</div>
                     <div className="text-[11px] text-gray-400">{dateForSlot(weekStart, slot).slice(0, 5)}</div>
                   </div>
                   {sel ? (
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">{sel.book} {sel.chapter}:{sel.verse}</div>
-                      <div className="tamil text-[13px] text-gray-500 truncate">{sel.text_tamil}</div>
+                      <div className="text-sm font-medium">{sel.book} {sel.chapter}:{sel.verse}</div>
+                      <div className="tamil text-[14px] text-gray-600 mt-0.5" style={{ lineHeight: 1.75 }}>{sel.text_tamil}</div>
                     </div>
                   ) : (
                     <div className="flex-1 text-sm text-gray-400 italic">No verse</div>

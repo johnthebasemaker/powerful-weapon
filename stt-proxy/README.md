@@ -78,6 +78,26 @@ In the admin's app: Settings → Members' phones → paste the same admin key �
 Endpoints: `GET /week` (public, newest 4 weeks) · `PUT /week` and
 `GET /admin/check` (need header `x-admin-key`).
 
+## Members, in-app recordings and scores (app 0.0.4+)
+
+The Worker also stores members (name + hashed PIN), their weekly recordings and
+the admin's marks in a free **D1** database, and deletes audio after 8 weeks
+(daily cron). Run the whole setup in one go from the project folder:
+
+```bash
+scripts/setup-worker.sh
+```
+
+It creates the D1 database, asks you for the **admin password** (secret
+`ADMIN_PASSWORD` — the admin types it in the app; only you can change it, by
+re-running the script) and optionally a **Sarvam** key (`SARVAM_API_KEY`) to
+compare Sarvam with Whisper, then deploys. Changing the admin password signs the
+admin out of every phone.
+
+Members log in with their name and the 4-digit PIN the admin gives them; 5 wrong
+PINs lock that member for 15 minutes, 10 wrong admin passwords lock admin login
+for 15 minutes.
+
 ## Swapping the STT vendor
 
 The proxy is provider-agnostic via env vars — no code change needed for any

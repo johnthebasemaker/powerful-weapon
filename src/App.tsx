@@ -8,7 +8,9 @@ import Leaderboards from './pages/Leaderboards';
 import Settings from './pages/Settings';
 import More from './pages/More';
 import Today from './pages/Today';
-import Week from './pages/Week';
+import Practice from './pages/Practice';
+import Record from './pages/Record';
+import Group from './pages/Group';
 import Welcome from './pages/Welcome';
 import { useAndroidBackButton } from './lib/useAndroidBackButton';
 import { useShareIntent } from './lib/shareIntent';
@@ -16,13 +18,14 @@ import { useNotifications } from './lib/scheduler';
 import { RoleProvider, useRole } from './lib/role';
 
 function Shell() {
-  const { role, ready } = useRole();
+  const { role, ready, memberAuthed } = useRole();
   useAndroidBackButton(); // Android hardware back button → router history / clean exit
   useShareIntent();       // WhatsApp "Share → Powerful Weapon" → Voice Inbox
   useNotifications();     // daily verse notifications: schedule on launch/resume + tap → screen
 
   if (!ready) return <div className="h-screen bg-brand-900" />;
   if (role === null) return <Welcome />;
+  if (role === 'member' && !memberAuthed) return <Welcome initial="member" />;
 
   const home = role === 'member' ? '/today' : '/dashboard';
   return (
@@ -32,7 +35,9 @@ function Shell() {
         {role === 'member' ? (
           <>
             <Route path="/today" element={<Today />} />
-            <Route path="/week" element={<Week />} />
+            <Route path="/practice" element={<Practice />} />
+            <Route path="/record" element={<Record />} />
+            <Route path="/group" element={<Group />} />
             <Route path="/settings" element={<Settings />} />
           </>
         ) : (

@@ -8,6 +8,8 @@ import { isNative } from '../lib/platform';
 import { Link } from 'react-router-dom';
 import { Badge, Button, Card, Empty, Field, Notice, PageHeader, SectionTitle, Segmented, Select, cx, dayLabel } from '../components/ui';
 import { IconChevronLeft, IconChevronRight, IconMic, IconTrash } from '../components/icons';
+import Recordings from '../components/Recordings';
+import AdminGate from '../components/AdminGate';
 import type { Selection, User, VoiceNote } from '../types';
 
 type Mode = 'perDay' | 'allWeek';
@@ -25,7 +27,23 @@ interface GroupedNote {
   min_id: number;
 }
 
+type Source = 'app' | 'whatsapp';
+
 export default function VoiceInbox() {
+  const [source, setSource] = useState<Source>('app');
+  return (
+    <div className="space-y-4">
+      <PageHeader title="Voice" subtitle="Recordings from the app, or voice notes imported from WhatsApp." />
+      <Segmented<Source> value={source} onChange={setSource}
+        options={[{ value: 'app', label: 'App recordings' }, { value: 'whatsapp', label: 'WhatsApp import' }]} />
+      {source === 'app'
+        ? <AdminGate what="see members' recordings"><Recordings /></AdminGate>
+        : <WhatsAppImport />}
+    </div>
+  );
+}
+
+function WhatsAppImport() {
   const [weekStart, setWeekStart] = useState(defaultUploadWeek());
   const [users, setUsers] = useState<User[]>([]);
   const [selections, setSelections] = useState<Selection[]>([]);
@@ -161,7 +179,6 @@ export default function VoiceInbox() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Voice Inbox" subtitle="Import WhatsApp voice notes and grade them automatically." />
 
       {/* Week navigation */}
       <Card className="space-y-3">

@@ -1,4 +1,4 @@
-import { normalizeTamil, tokenize, stemTokens, similarity } from './tamil';
+import { normalizeTamil, phoneticTamil, tokenize, stemTokens, similarity } from './tamil';
 
 export interface GradingInput {
   transcript: string;
@@ -64,11 +64,18 @@ function scoreAccuracy(transcript: string, reference: string): {
   // பத்து"), or even other verses bundled together. Sliding a reference-length
   // window over the transcript and taking the best similarity tells us how well
   // the reader recited *this* verse, independent of surrounding content.
-  const compactEditSim = bestWindowSimilarity(tCompact, rCompact);
+  // Also compare in spoken-Tamil form (ழ/ள/ல, ண/ந/ன, vowel length…) and keep
+  // the better of the two, so everyday pronunciation isn't marked as an error.
+  const tSpoken = phoneticTamil(transcript).replace(/\s+/g, '');
+  const rSpoken = phoneticTamil(reference).replace(/\s+/g, '');
+  const compactEditSim = Math.max(
+    bestWindowSimilarity(tCompact, rCompact),
+    bestWindowSimilarity(tSpoken, rSpoken),
+  );
 
   // Stemmed token F1 (handles -இலே/-இல், -ஏ endings, plurals, etc.)
-  const tStems = new Set(stemTokens(tokenize(transcript)));
-  const rStems = new Set(stemTokens(tokenize(reference)));
+  const tStems = new Set(stemTokens(tokenize(transcript)).map(phoneticTamil));
+  const rStems = new Set(stemTokens(tokenize(reference)).map(phoneticTamil));
   let tp = 0;
   for (const w of rStems) if (tStems.has(w)) tp++;
   const precision = tStems.size ? tp / tStems.size : 0;
@@ -140,8 +147,17 @@ function scoreReference(
   refVerseMatch: boolean;
 } {
   const norm = normalizeTamil(transcript);
+  const spoken = phoneticTamil(transcript);
   const bookTokens = tokenize(citation.book);
-  const refBookMatch = bookTokens.every((t) => norm.includes(t));
+  // Numbered books ("1 சாமுவேல்") are usually spoken as a word: ஒன்று/ஒன்னு/முதலாம்.
+  const bookTokenSpoken = (t: string): boolean => {
+    if (norm.includes(t) || spoken.includes(phoneticTamil(t))) return true;
+    if (!/^\d+$/.test(t)) return false;
+    const n = parseInt(t, 10);
+    const forms = [tamilNumberWord(n), toTamilNumeral(n), ...(BOOK_ORDINALS[n] ?? [])].filter(Boolean) as string[];
+    return forms.some((f) => spoken.includes(phoneticTamil(f)));
+  };
+  const refBookMatch = bookTokens.every(bookTokenSpoken);
 
   const arabicCh = String(citation.chapter);
   const arabicVs = String(citation.verse);
@@ -190,6 +206,12 @@ function bestWindowSimilarity(haystack: string, needle: string): number {
   }
   return best;
 }
+
+const BOOK_ORDINALS: Record<number, string[]> = {
+  1: ['முதலாம்', 'ஒன்றாம்', 'ஒன்னு'],
+  2: ['இரண்டாம்', 'ரெண்டாம்', 'ரெண்டு'],
+  3: ['மூன்றாம்', 'மூணாம்', 'மூணு'],
+};
 
 const TAMIL_DIGITS = ['௦', '௧', '௨', '௩', '௪', '௫', '௬', '௭', '௮', '௯'];
 function toTamilNumeral(n: number): string {

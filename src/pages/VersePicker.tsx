@@ -66,7 +66,7 @@ export default function VersePicker() {
     refreshNotifications().catch(() => {});
     // Push straight to members' phones when an admin key is configured.
     const s = (await api().settings.getAll()) as Record<string, string>;
-    if (s.admin_key) {
+    if (s.admin_token || s.admin_key) {
       const r = await publishWeek(weekStart);
       toast(r.ok ? 'Week saved and sent to members' : `Saved. Not sent to members: ${r.error}`, r.ok ? 'success' : 'error', 5000);
     } else {

@@ -55,3 +55,21 @@ Install the release APK on the phone first (USB debugging on):
 - [ ] Set the time 2 minutes ahead, lock the phone, wait → notification with the Tamil verse arrives on time.
 - [ ] Every tab fits a portrait phone: no sideways scrolling, buttons not cut off, text not squashed.
 - [ ] Voice Inbox: share a WhatsApp voice note → Import + Grade still works (release build uses R8).
+
+## 0.0.4 checks (members recording in the app)
+
+Run `scripts/setup-worker.sh` first, then update the app on two phones through Internal testing.
+
+- [ ] Admin phone: Settings → Admin account → log in with the admin password.
+- [ ] Members → **+ Add** a test member → note the PIN (WhatsApp/Copy buttons work).
+- [ ] Settings → Recording time → set today, a window that is open now → Save.
+- [ ] Second phone: fresh install → "I'm a group member" → pick the name → PIN → Verses shows all 7 verses in full.
+- [ ] Record: Android asks for microphone permission; countdown → verses hidden, no pause button.
+- [ ] While recording, press Home → take is cancelled with a message and counts as a try.
+- [ ] Record again, tap **Next verse** for each verse, Finish → listen → **Send to admin**.
+- [ ] Group tab shows the member as Sent with a play button, no marks.
+- [ ] Admin: Voice → App recordings → play it → **Auto-mark** (per-verse marks + transcripts) → give your own mark.
+- [ ] **Compare engines** (only if the Sarvam key is set) shows both totals.
+- [ ] **Backup** shares the week's audio files (save to Drive).
+- [ ] Not-sent list → **Remind** opens WhatsApp with the message.
+- [ ] Home tab: today's verse and the week's verses are shown in full.

@@ -49,6 +49,16 @@ if ! has SARVAM_API_KEY; then
   read -r -p "     Add a Sarvam API key to compare Sarvam with Whisper? [y/N] " S
   [[ "$S" =~ ^[Yy] ]] && npx wrangler secret put SARVAM_API_KEY
 fi
+if ! has FCM_SERVICE_ACCOUNT; then
+  echo "     Push alerts (member out of tries → your phone) need the Firebase service-account key:"
+  echo "     Firebase console → Project settings → Service accounts → Generate new private key (a .json file)."
+  read -r -p "     Path to that .json file (Enter to skip): " F
+  F="${F/#\~/$HOME}"
+  if [ -n "$F" ] && [ -f "$F" ]; then
+    npx wrangler secret put FCM_SERVICE_ACCOUNT < "$F"
+    echo "     ✅ Stored on the Worker. You can now delete the downloaded .json file."
+  fi
+fi
 
 echo "5/5  Deploying…"
 npx wrangler deploy

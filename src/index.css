@@ -56,3 +56,46 @@ input, select, textarea { font-size: 16px; }
 /* Electron-only: exempt buttons from the draggable title-bar region.
    No-op inside a mobile webview, so it is safe to leave in place. */
 button { -webkit-app-region: no-drag; }
+
+/* ───────── Dark mode (Settings → Display → Theme; <html class="dark">) ─────────
+   The screens are written with light utility classes; these overrides remap the
+   light surfaces and greys to the logo's dark teal palette in one place. Dark
+   cards (bg-brand-900 etc.) and white-on-dark text are left as they are. */
+html.dark, html.dark body, html.dark #root { background: #0a1513; color: #e6efec; color-scheme: dark; }
+html.dark .bg-paper { background-color: #0a1513; }
+html.dark .bg-white, html.dark .bg-white\/95, html.dark .bg-white\/60 { background-color: #12201d; }
+html.dark .bg-gray-50, html.dark .hover\:bg-gray-50:hover, html.dark .active\:bg-gray-50:active { background-color: #172825; }
+html.dark .bg-gray-100, html.dark .active\:bg-gray-100:active { background-color: #1c2f2b; }
+html.dark .bg-gray-200, html.dark .bg-gray-200\/70 { background-color: #1a2b28; }
+html.dark .bg-brand-50 { background-color: #12302b; }
+html.dark .bg-brand-100 { background-color: #1a3d37; }
+html.dark .bg-gold-100\/40 { background-color: rgba(214, 176, 90, .10); }
+html.dark .bg-emerald-50 { background-color: rgba(16, 185, 129, .12); }
+html.dark .bg-emerald-100 { background-color: rgba(16, 185, 129, .2); }
+html.dark .bg-red-50, html.dark .bg-red-50\/60 { background-color: rgba(239, 68, 68, .12); }
+html.dark .bg-amber-50 { background-color: rgba(245, 158, 11, .12); }
+
+html.dark .text-ink, html.dark .text-gray-800, html.dark .text-gray-900 { color: #e6efec; }
+html.dark .text-gray-700 { color: #c9d6d2; }
+html.dark .text-gray-600 { color: #aebfba; }
+html.dark .text-gray-500 { color: #8fa39e; }
+html.dark .text-gray-400 { color: #6f8580; }
+html.dark .text-gray-300 { color: #4f6460; }
+html.dark .text-brand-700, html.dark .text-brand-800, html.dark .text-brand-900 { color: #7bb9ae; }
+html.dark .text-emerald-700, html.dark .text-emerald-800, html.dark .text-emerald-900 { color: #6ee7b7; }
+html.dark .text-red-700, html.dark .text-red-800, html.dark .text-red-900 { color: #fca5a5; }
+html.dark .text-amber-700, html.dark .text-amber-800, html.dark .text-amber-900 { color: #fcd34d; }
+html.dark .text-gold-600 { color: #e4c77f; }
+
+html.dark .border-black\/5, html.dark .border-gray-100, html.dark .border-gray-200 { border-color: rgba(255, 255, 255, .07); }
+html.dark .border-gray-300 { border-color: rgba(255, 255, 255, .14); }
+html.dark .border-brand-100 { border-color: #1f4a43; }
+html.dark .border-amber-200 { border-color: rgba(245, 158, 11, .3); }
+html.dark .border-red-200 { border-color: rgba(239, 68, 68, .3); }
+html.dark .border-emerald-200 { border-color: rgba(16, 185, 129, .3); }
+html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, .07); }
+html.dark .divide-red-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(239, 68, 68, .2); }
+html.dark .ring-gray-300 { --tw-ring-color: rgba(255, 255, 255, .2); }
+html.dark .shadow-card { box-shadow: none; }
+html.dark input, html.dark select, html.dark textarea { color-scheme: dark; }
+html.dark ::-webkit-scrollbar-thumb { background: #2a3f3b; }

@@ -73,3 +73,28 @@ Run `scripts/setup-worker.sh` first, then update the app on two phones through I
 - [ ] **Backup** shares the week's audio files (save to Drive).
 - [ ] Not-sent list → **Remind** opens WhatsApp with the message.
 - [ ] Home tab: today's verse and the week's verses are shown in full.
+
+## 0.0.5 checklist
+
+**Before installing:** deploy the Worker (`cd stt-proxy && npx wrangler deploy`) — the app needs the new try counter.
+
+Member phone
+- [ ] Settings → Display: switch தமிழ் / English; every member screen changes. Text size Large / Extra large scales everything. Theme Dark works.
+- [ ] Record: "5 of 5 tries left". Start → lock the phone / take a call → reopen: toast says the try came back (2 times a week), then it costs a try.
+- [ ] Recording keeps the screen on for 3+ minutes without touching it.
+- [ ] Finish → the player plays immediately. Turn on flight mode → Send fails → leave the screen and come back → recording is still there → flight mode off → Send works.
+- [ ] Use every try → "Ask the admin for one more try" → admin phone gets an urgent push.
+- [ ] Your progress shows the streak and last 8 weeks (no marks).
+- [ ] Practice opens on today's verse; "First letters" shows full Tamil letters (கு, not க). Voice check gives a % and the missed words; 10 a day.
+- [ ] Group highlights "You".
+- [ ] Reinstall the app → log in → tries used are still counted.
+
+Admin phone
+- [ ] Only one admin password prompt for the whole app.
+- [ ] Push "<name> has no tries left" arrives with the app closed; tap → Voice → Needs a try → Give 1 more try → member gets "One more try".
+- [ ] "Allow re-record" gives the member all tries back.
+- [ ] Share list / Share + top 3 open WhatsApp with the week summary.
+- [ ] Verse Picker search: `kanam pannu`, `karthar en meippar`, `john 3:16`, `psalm 23`, `யோவான் 3:16`.
+- [ ] Settings → Auto-marking → Export grading log saves a .json.
+- [ ] Settings → Recording time → Tries per member offers 1–10 (default 5).
+- [ ] Home: each day's verse uses the full width.

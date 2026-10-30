@@ -88,7 +88,7 @@ export default function VersePicker() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Verse Picker" subtitle="Search a Tamil root word and pick 7 verses for the week." />
+      <PageHeader title="Verse Picker" subtitle="Search in Tamil (கனம்), Tanglish (kanam pannu) or by reference (john 3:16), then pick 7 verses for the week." />
 
       <Card className="space-y-3">
         <Segmented
@@ -117,7 +117,7 @@ export default function VersePicker() {
           <Input
             value={rootWord}
             onChange={(e) => setRootWord(e.target.value)}
-            placeholder="Root word, e.g. கனம்"
+            placeholder="கனம் · kanam · john 3:16"
             className="tamil pl-10"
             enterKeyHint="search"
           />
@@ -141,7 +141,7 @@ export default function VersePicker() {
                 <span className="w-9 shrink-0 text-xs font-semibold text-gray-500 pt-0.5">{weekdayLabel(s.slot)}</span>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium">{s.book} {s.chapter}:{s.verse}</div>
-                  <div className="tamil text-[13px] text-gray-500 line-clamp-1">{s.text_tamil}</div>
+                  <div className="tamil text-[0.8125rem] text-gray-500 line-clamp-1">{s.text_tamil}</div>
                 </div>
               </li>
             ))}
@@ -150,7 +150,7 @@ export default function VersePicker() {
       )}
 
       {searched && results.length === 0 && !searching && (
-        <p className="text-sm text-gray-500 text-center py-6">No verses matched “{rootWord}”. Try a shorter root word.</p>
+        <p className="text-sm text-gray-500 text-center py-6">No verses matched “{rootWord}”. Try a shorter word, or type it in Tamil.</p>
       )}
 
       {results.length > 0 && (
@@ -179,9 +179,9 @@ export default function VersePicker() {
                       <span className="flex flex-wrap items-center gap-1.5">
                         <span className="text-sm font-semibold">{v.book} {v.chapter}:{v.verse}</span>
                         {v.matched_token && <Badge tone="brand"><span className="tamil">{v.matched_token}</span></Badge>}
-                        <span className="text-[11px] text-gray-400">{(v.score * 100).toFixed(0)}%</span>
+                        <span className="text-[0.6875rem] text-gray-400">{(v.score * 100).toFixed(0)}%</span>
                       </span>
-                      <span className="tamil block text-[15px] text-gray-800 mt-1">{v.text_tamil}</span>
+                      <span className="tamil block text-[0.9375rem] text-gray-800 mt-1">{v.text_tamil}</span>
                     </span>
                   </button>
                   <button

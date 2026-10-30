@@ -9,6 +9,16 @@ cd "$ROOT"
 export JAVA_HOME="${JAVA_HOME:-$(ls -d "$HOME"/Library/Java/JavaVirtualMachines/jdk-21*/Contents/Home | head -1)}"
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 
+# Push alerts need Firebase: build them in only when google-services.json is present
+# (without it the push plugin would crash on register()).
+if [ -f android/app/google-services.json ]; then
+  echo "Firebase config found — push notifications ON"
+  export VITE_PUSH=1
+else
+  echo "⚠️  android/app/google-services.json missing — building WITHOUT push notifications"
+  export VITE_PUSH=0
+fi
+
 npx vite build
 npx cap sync android
 (cd android && ./gradlew --no-daemon bundleRelease assembleRelease)

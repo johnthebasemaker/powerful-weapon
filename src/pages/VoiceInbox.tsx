@@ -185,7 +185,7 @@ function WhatsAppImport() {
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" className="w-10 px-0" onClick={() => jumpWeek(-1)} aria-label="Previous week"><IconChevronLeft /></Button>
           <label className="flex-1 min-w-0 text-center relative">
-            <span className="block text-[15px] font-semibold text-ink truncate">{dayLabel(weekStart)} – {dayLabel(addDays(weekStart, 6))}</span>
+            <span className="block text-[0.9375rem] font-semibold text-ink truncate">{dayLabel(weekStart)} – {dayLabel(addDays(weekStart, 6))}</span>
             <span className="block text-xs text-gray-500">Tap to choose a week</span>
             <input
               type="date" value={weekStart} aria-label="Week"
@@ -313,7 +313,7 @@ function WhatsAppImport() {
                     </div>
                     <div className="text-right shrink-0">
                       <div className="text-2xl font-bold text-brand-800 leading-none">{g.avg_total != null ? g.avg_total.toFixed(1) : '—'}</div>
-                      <div className="text-[11px] text-gray-500 mt-1">avg / 100</div>
+                      <div className="text-[0.6875rem] text-gray-500 mt-1">avg / 100</div>
                     </div>
                   </div>
                   <div className="flex gap-2 mt-3">
@@ -338,17 +338,17 @@ function Details({ rows, transcript }: { rows: VoiceNote[]; transcript: string |
     <div className="mt-4 space-y-3 border-t border-gray-100 pt-3">
       {transcript && (
         <div>
-          <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Transcript</div>
+          <div className="text-[0.6875rem] uppercase tracking-wide text-gray-500 mb-1">Transcript</div>
           <div className="tamil text-sm bg-gray-50 rounded-xl p-3 leading-relaxed">{transcript}</div>
         </div>
       )}
       <div>
-        <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Per-verse scores</div>
+        <div className="text-[0.6875rem] uppercase tracking-wide text-gray-500 mb-1">Per-verse scores</div>
         <div className="rounded-xl border border-gray-100 divide-y divide-gray-100">
           {rows.map((r) => (
             <div key={r.id} className="flex items-center gap-3 px-3 py-2">
               <span className="w-9 text-xs font-semibold text-gray-600">{weekdayLabel(r.verse_slot)}</span>
-              <span className="flex-1 text-[11px] text-gray-500 leading-tight">
+              <span className="flex-1 text-[0.6875rem] text-gray-500 leading-tight">
                 Accuracy {r.accuracy_score?.toFixed(1) ?? '—'}/60 · Fluency {r.fluency_score?.toFixed(1) ?? '—'}/25 · Reference {r.reference_score?.toFixed(1) ?? '—'}/15
               </span>
               <span className="text-sm font-bold text-ink w-12 text-right">{r.total_score?.toFixed(1) ?? '—'}</span>

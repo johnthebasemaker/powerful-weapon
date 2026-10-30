@@ -55,3 +55,8 @@ android/keystore.properties
 
 # Capacitor asset source (icon of record lives in resources/icons/)
 assets/
+
+# Firebase app config (from the Firebase console) — kept out of the public repo.
+android/app/google-services.json
+# Firebase service-account key — a secret; stored only as the FCM_SERVICE_ACCOUNT Worker secret.
+*firebase*adminsdk*.json

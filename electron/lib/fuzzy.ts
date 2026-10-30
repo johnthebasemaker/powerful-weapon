@@ -1,4 +1,5 @@
 import { normalizeTamil, stripSuffix, tokenize, similarity } from './tamil';
+import { isLatin, parseReference, tanglishScore } from './tanglish';
 
 export interface VerseRow {
   id: number;
@@ -32,6 +33,9 @@ export function rankVerses(
   verses: VerseRow[],
   limit = 30
 ): RankedVerse[] {
+  if (isLatin(rootWord)) return rankLatin(rootWord, verses, limit);
+  const tamilRef = rankTamilReference(rootWord, verses, limit);
+  if (tamilRef) return tamilRef;
   const rootNorm = normalizeTamil(rootWord);
   const rootStem = stripSuffix(rootNorm);
   if (!rootStem) return [];
@@ -70,6 +74,48 @@ export function rankVerses(
     ranked.push({ ...v, score, matched_token: matchedToken });
   }
 
+  ranked.sort((a, b) => b.score - a.score);
+  return ranked.slice(0, limit);
+}
+
+/** Books in Bible order, taken from the verse table itself (its rows are in canonical order). */
+function bookOrder(verses: VerseRow[]): string[] {
+  const books: string[] = [];
+  for (const v of verses) if (books[books.length - 1] !== v.book && !books.includes(v.book)) books.push(v.book);
+  return books;
+}
+
+function byReference(verses: VerseRow[], book: string, chapter?: number, verse?: number, limit = 30): RankedVerse[] {
+  return verses
+    .filter((v) => v.book === book && (chapter == null || v.chapter === chapter) && (verse == null || v.verse === verse))
+    .slice(0, chapter == null ? 1 : limit)
+    .map((v) => ({ ...v, score: 2, matched_token: null }));
+}
+
+/** "யோவான் 3:16" typed in Tamil. */
+function rankTamilReference(q: string, verses: VerseRow[], limit: number): RankedVerse[] | null {
+  const m = q.trim().match(/^(.+?)\s+(\d+)(?:\s*[:.\s]\s*(\d+))?$/);
+  if (!m) return null;
+  const name = m[1].trim();
+  const book = bookOrder(verses).find((b) => b === name);
+  return book ? byReference(verses, book, Number(m[2]), m[3] ? Number(m[3]) : undefined, limit) : null;
+}
+
+/** Typed in English letters: a reference ("john 3 16") or Tanglish words ("karthar kirubai"). */
+function rankLatin(q: string, verses: VerseRow[], limit: number): RankedVerse[] {
+  const ref = parseReference(q);
+  if (ref && (ref.chapter != null || q.trim().split(/\s+/).length <= 2)) {
+    const book = bookOrder(verses)[ref.bookIndex];
+    if (book) {
+      const hits = byReference(verses, book, ref.chapter, ref.verse, limit);
+      if (hits.length) return hits;
+    }
+  }
+  const ranked: RankedVerse[] = [];
+  for (const v of verses) {
+    const s = tanglishScore(q, v);
+    if (s >= 0.6) ranked.push({ ...v, score: s + (v.is_memory_verse ? 0.25 : 0), matched_token: null });
+  }
   ranked.sort((a, b) => b.score - a.score);
   return ranked.slice(0, limit);
 }

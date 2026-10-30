@@ -30,7 +30,7 @@ export function Card({ children, className, pad = true }: { children: ReactNode;
 export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3 mb-3">
-      <h2 className="text-[15px] font-semibold text-ink">{children}</h2>
+      <h2 className="text-[0.9375rem] font-semibold text-ink">{children}</h2>
       {action}
     </div>
   );
@@ -49,7 +49,7 @@ const VARIANTS: Record<Variant, string> = {
 export function Button({
   variant = 'primary', size = 'md', block, className, children, ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: 'sm' | 'md' | 'lg'; block?: boolean }) {
-  const sizes = { sm: 'h-9 px-3 text-sm', md: 'h-11 px-4 text-[15px]', lg: 'h-12 px-5 text-base' };
+  const sizes = { sm: 'h-9 px-3 text-sm', md: 'h-11 px-4 text-[0.9375rem]', lg: 'h-12 px-5 text-base' };
   return (
     <button
       {...rest}
@@ -105,7 +105,7 @@ export function Badge({ tone = 'gray', children }: { tone?: 'gray' | 'green' | '
 export function Stat({ label, value, hint, tone = 'default' }: { label: string; value: ReactNode; hint?: ReactNode; tone?: 'default' | 'warn' | 'ok' }) {
   return (
     <div className="bg-white rounded-2xl border border-black/5 shadow-card px-3.5 py-3 min-w-0">
-      <div className="text-[11px] uppercase tracking-wide text-gray-500 truncate">{label}</div>
+      <div className="text-[0.6875rem] uppercase tracking-wide text-gray-500 truncate">{label}</div>
       <div className={cx('text-lg font-semibold mt-0.5 truncate', tone === 'warn' && 'text-amber-700', tone === 'ok' && 'text-brand-700')}>{value}</div>
       {hint && <div className="text-xs text-gray-500 mt-0.5 truncate">{hint}</div>}
     </div>
@@ -146,7 +146,8 @@ export function Segmented<T extends string>({ value, options, onChange }: {
           aria-selected={value === o.value}
           onClick={() => onChange(o.value)}
           className={cx(
-            'flex-1 h-9 px-2 rounded-lg text-sm font-medium transition truncate',
+            // Wraps to two lines rather than cutting labels off (Tamil words run long).
+            'flex-1 min-w-0 min-h-9 px-1.5 py-1 rounded-lg text-sm leading-tight font-medium transition break-words',
             value === o.value ? 'bg-white text-brand-800 shadow-card' : 'text-gray-600',
           )}
         >
@@ -166,7 +167,7 @@ export function Row({ icon, title, subtitle, right, onClick }: {
     <Tag onClick={onClick} className={cx('w-full flex items-center gap-3 px-4 py-3.5 text-left', onClick && 'active:bg-gray-50')}>
       {icon && <span className="w-9 h-9 rounded-xl bg-brand-50 text-brand-700 grid place-items-center shrink-0">{icon}</span>}
       <span className="flex-1 min-w-0">
-        <span className="block text-[15px] font-medium text-ink">{title}</span>
+        <span className="block text-[0.9375rem] font-medium text-ink">{title}</span>
         {subtitle && <span className="block text-xs text-gray-500 mt-0.5 leading-snug">{subtitle}</span>}
       </span>
       {right ?? (onClick && <Chevron />)}

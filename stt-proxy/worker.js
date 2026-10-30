@@ -17,12 +17,22 @@
 //   POST /auth/member  { memberId, pin }           -> { token, member }
 //   GET  /members                                  -> [{ id, name }]           (names only, for the login list)
 //   GET  /config                                   -> recording window settings (public)
-//   GET  /me/status                                (member) window + whether this week is sent
+//   GET  /me/status                                (member) window, tries used/allowed, whether this week is sent
+//   POST /me/take      { weekStart }               (member) start a try — counted here, not on the phone
+//   POST /me/take/cancel { interrupted }            (member) an interrupted try is given back (2 a week)
+//   POST /me/request-try                           (member) out of tries → urgent push to the admin
+//   GET  /me/history                               (member) weeks sent, for the streak
+//   POST /me/practice  { audioBase64, mimeType, prompt }  (member) practice voice check, 10 a day
+//   POST /devices      { token }                    (member|admin) register the phone for push (FCM)
 //   POST /submissions  { weekStart, audioBase64, mimeType, durationS, takes, marks }  (member, inside the window)
 //   GET  /group?week=                              (member|admin) who has sent — names only, never scores
 //   GET  /audio/:id                                (member|admin) the recording
 //   GET/POST/PATCH/DELETE /admin/members[/:id[/pin]], PUT /admin/config,
-//   GET /admin/submissions?week=, PATCH|DELETE /admin/submissions/:id, GET /admin/scores   (admin)
+//   GET /admin/submissions?week=, PATCH|DELETE /admin/submissions/:id, GET /admin/scores,
+//   POST /admin/members/:id/extra-try, GET /admin/needs-try   (admin)
+//
+// Push (optional): FCM_SERVICE_ACCOUNT = the Firebase service-account JSON (a secret).
+// Without it everything works, just without push alerts.
 //
 // Scheduled (cron): audio older than 8 weeks is deleted; scores are kept.
 
@@ -170,13 +180,21 @@ async function db(env) {
         created_at TEXT NOT NULL DEFAULT (datetime('now')), UNIQUE(member_id, week_start))`),
       env.DB.prepare(`CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT NOT NULL)`),
       env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_fail (ts INTEGER NOT NULL)`),
+      env.DB.prepare(`CREATE TABLE IF NOT EXISTS attempts (
+        member_id INTEGER NOT NULL, week_start TEXT NOT NULL, used INTEGER NOT NULL DEFAULT 0,
+        bonus INTEGER NOT NULL DEFAULT 0, refunds INTEGER NOT NULL DEFAULT 0, last_start INTEGER NOT NULL DEFAULT 0,
+        alerted_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (member_id, week_start))`),
+      env.DB.prepare(`CREATE TABLE IF NOT EXISTS devices (
+        token TEXT PRIMARY KEY, role TEXT NOT NULL, member_id INTEGER, updated_at INTEGER NOT NULL)`),
+      env.DB.prepare(`CREATE TABLE IF NOT EXISTS practice_use (
+        member_id INTEGER NOT NULL, day TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (member_id, day))`),
     ]);
     schemaReady = true;
   }
   return env.DB;
 }
 
-const DEFAULT_CONFIG = { record_dow: '7', record_from: '18:00', record_to: '22:00', extend_days: '0', max_takes: '3' };
+const DEFAULT_CONFIG = { record_dow: '7', record_from: '18:00', record_to: '22:00', extend_days: '0', max_takes: '5' };
 
 async function getConfig(env) {
   const { results } = await (await db(env)).prepare('SELECT key, value FROM config').all();
@@ -271,11 +289,18 @@ async function handleFeed(request, env, path) {
     try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
     const week = cleanWeek(body);
     if (!week) return json({ error: 'Malformed week' }, 400);
-    await env.WEEKS.put(`week:${week.weekStart}`, JSON.stringify(week));
     const index = (await env.WEEKS.get('index', 'json')) || [];
+    const isNew = !index.includes(week.weekStart);
+    await env.WEEKS.put(`week:${week.weekStart}`, JSON.stringify(week));
     const next = [week.weekStart, ...index.filter((w) => w !== week.weekStart)].sort().reverse();
     for (const old of next.slice(KEEP_WEEKS)) await env.WEEKS.delete(`week:${old}`);
     await env.WEEKS.put('index', JSON.stringify(next.slice(0, KEEP_WEEKS)));
+    // Members' phones refresh their daily notifications when they open this.
+    if (isNew && env.DB) {
+      await push(env, await db(env), "role = 'member'", [], {
+        title: 'இந்த வார வசனங்கள் தயார்', body: "This week's verses are ready. Tap to open.", channel: 'daily-verse', data: { action: 'open-today' },
+      });
+    }
     return json({ ok: true, weekStart: week.weekStart });
   }
   return json({ error: 'Method not allowed' }, 405);
@@ -296,6 +321,78 @@ async function nameTaken(D, name, exceptId = 0) {
 const MAX_AUDIO_BYTES = 1_900_000; // D1 row limit is 2 MB; 4 min of 32 kbps Opus ≈ 1 MB
 const randomPin = () => String(crypto.getRandomValues(new Uint32Array(1))[0] % 10000).padStart(4, '0');
 const pinHash = (env, id, pin) => sha256Hex(`${sessionSecret(env)}|${id}|${pin}`);
+
+const MAX_REFUNDS = 2;      // interrupted tries given back per week
+const PRACTICE_PER_DAY = 10;
+
+async function attemptRow(D, mid, week) {
+  return (await D.prepare('SELECT used, bonus, refunds, last_start, alerted_at FROM attempts WHERE member_id = ? AND week_start = ?')
+    .bind(mid, week).first()) || { used: 0, bonus: 0, refunds: 0, last_start: 0, alerted_at: 0 };
+}
+
+/* ── Push (FCM HTTP v1) ── */
+
+let fcmAuth = null; // { token, exp, project }
+
+async function fcmAccess(env) {
+  if (!env.FCM_SERVICE_ACCOUNT) return null;
+  if (fcmAuth && fcmAuth.exp > Date.now() + 60000) return fcmAuth;
+  const sa = JSON.parse(env.FCM_SERVICE_ACCOUNT);
+  const now = Math.floor(Date.now() / 1000);
+  const head = b64url(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
+  const claim = b64url(enc.encode(JSON.stringify({
+    iss: sa.client_email, scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600,
+  })));
+  const pem = sa.private_key.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+  const key = await crypto.subtle.importKey('pkcs8', base64ToBytes(pem), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const sig = b64url(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(`${head}.${claim}`)));
+  const r = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${head}.${claim}.${sig}`,
+  });
+  if (!r.ok) throw new Error(`FCM auth HTTP ${r.status}`);
+  const t = await r.json();
+  fcmAuth = { token: t.access_token, exp: Date.now() + (t.expires_in || 3600) * 1000, project: sa.project_id };
+  return fcmAuth;
+}
+
+/** Send a notification to every registered phone matching `where` (SQL on devices). Never throws. */
+async function push(env, D, where, binds, { title, body, channel = 'admin-alerts', data = {} }) {
+  try {
+    const auth = await fcmAccess(env);
+    if (!auth) return 0;
+    const { results } = await D.prepare(`SELECT token FROM devices WHERE ${where}`).bind(...binds).all();
+    let sent = 0;
+    for (const { token } of results) {
+      const r = await fetch(`https://fcm.googleapis.com/v1/projects/${auth.project}/messages:send`, {
+        method: 'POST', headers: { Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: {
+          token, notification: { title, body },
+          data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
+          android: { priority: 'HIGH', notification: { channel_id: channel, sound: 'default', icon: 'ic_stat_verse', color: '#1F6158' } },
+        } }),
+      });
+      if (r.ok) sent++;
+      else if (r.status === 404 || r.status === 400) await D.prepare('DELETE FROM devices WHERE token = ?').bind(token).run();
+    }
+    return sent;
+  } catch {
+    return 0;
+  }
+}
+
+/** Urgent alert to the admin's phones: this member has no tries left. */
+async function alertOutOfTries(env, D, mid, week, requested) {
+  const m = await D.prepare('SELECT name FROM members WHERE id = ?').bind(mid).first();
+  await D.prepare(`INSERT INTO attempts (member_id, week_start, alerted_at) VALUES (?, ?, ?)
+    ON CONFLICT(member_id, week_start) DO UPDATE SET alerted_at = excluded.alerted_at`).bind(mid, week, Date.now()).run();
+  return push(env, D, "role = 'admin'", [], {
+    title: requested ? `${m?.name ?? 'A member'} is asking for another try` : `${m?.name ?? 'A member'} has no tries left`,
+    body: 'Tap to give one more try.',
+    data: { action: 'needs-try', memberId: mid, weekStart: week },
+  });
+}
 
 async function readBody(request) {
   try { return await request.json(); } catch { return null; }
@@ -325,7 +422,7 @@ async function handleApi(request, env, path, url) {
       return json({ error: 'Wrong admin password' }, 401);
     }
     const pv = (await sha256Hex(pw)).slice(0, 12);
-    return json({ token: await makeToken(env, { role: 'admin', pv, exp: Date.now() + 60 * 86400000 }) });
+    return json({ token: await makeToken(env, { role: 'admin', pv, exp: Date.now() + 365 * 86400000 }) });
   }
 
   if (path === '/auth/member' && method === 'POST') {
@@ -365,7 +462,101 @@ async function handleApi(request, env, path, url) {
     const sent = await D.prepare('SELECT id, created_at FROM submissions WHERE member_id = ? AND week_start = ?').bind(me.mid, w.weekStart).first();
     const member = await D.prepare('SELECT id, name, active FROM members WHERE id = ?').bind(me.mid).first();
     if (!member?.active) return json({ error: 'Your membership was removed by the admin' }, 403);
-    return json({ member: { id: member.id, name: member.name }, window: w, maxTakes: Number(cfg.max_takes) || 3, sent: sent || null });
+    const a = await attemptRow(D, me.mid, w.weekStart);
+    return json({
+      member: { id: member.id, name: member.name }, window: w, sent: sent || null,
+      maxTakes: (Number(cfg.max_takes) || 5) + a.bonus, takesUsed: a.used, refundsLeft: Math.max(0, MAX_REFUNDS - a.refunds),
+    });
+  }
+
+  if (path === '/me/take' && method === 'POST') {
+    const me = await bearer(request, env, 'member');
+    if (!me) return json({ error: 'Please log in again' }, 401);
+    const body = (await readBody(request)) || {};
+    const cfg = await getConfig(env);
+    const w = activeWindow(cfg);
+    if (!w.open || body.weekStart !== w.weekStart) return json({ error: 'The recording time is closed.' }, 403);
+    const sent = await D.prepare('SELECT id FROM submissions WHERE member_id = ? AND week_start = ?').bind(me.mid, w.weekStart).first();
+    if (sent) return json({ error: 'You already sent your recording for this week.' }, 409);
+    const a = await attemptRow(D, me.mid, w.weekStart);
+    const max = (Number(cfg.max_takes) || 5) + a.bonus;
+    if (a.used >= max) return json({ error: 'No tries left', noTries: true, takesUsed: a.used, maxTakes: max }, 403);
+    await D.prepare(`INSERT INTO attempts (member_id, week_start, used, last_start) VALUES (?, ?, 1, ?)
+      ON CONFLICT(member_id, week_start) DO UPDATE SET used = used + 1, last_start = excluded.last_start`)
+      .bind(me.mid, w.weekStart, Date.now()).run();
+    return json({ takesUsed: a.used + 1, maxTakes: max });
+  }
+
+  if (path === '/me/take/cancel' && method === 'POST') {
+    const me = await bearer(request, env, 'member');
+    if (!me) return json({ error: 'Please log in again' }, 401);
+    const body = (await readBody(request)) || {};
+    const cfg = await getConfig(env);
+    const week = WEEK_RE.test(body.weekStart || '') ? body.weekStart : activeWindow(cfg).weekStart;
+    const a = await attemptRow(D, me.mid, week);
+    const max = (Number(cfg.max_takes) || 5) + a.bonus;
+    // A call, alarm or lock screen interrupted it: give the try back (a few times a week).
+    const recent = a.used > 0 && Date.now() - a.last_start < 10 * 60000;
+    // The microphone never started (permission refused): nothing was recorded, so it doesn't count as a refund.
+    const micFailed = !!body.micFailed && recent && Date.now() - a.last_start < 60000;
+    const refund = micFailed || (!!body.interrupted && a.refunds < MAX_REFUNDS && recent);
+    if (refund) {
+      await D.prepare('UPDATE attempts SET used = used - 1, refunds = refunds + ? WHERE member_id = ? AND week_start = ?')
+        .bind(micFailed ? 0 : 1, me.mid, week).run();
+    }
+    const used = a.used - (refund ? 1 : 0);
+    if (used >= max) await alertOutOfTries(env, D, me.mid, week, false);
+    return json({ refunded: refund, takesUsed: used, maxTakes: max, refundsLeft: Math.max(0, MAX_REFUNDS - a.refunds - (refund && !micFailed ? 1 : 0)) });
+  }
+
+  if (path === '/me/request-try' && method === 'POST') {
+    const me = await bearer(request, env, 'member');
+    if (!me) return json({ error: 'Please log in again' }, 401);
+    const w = activeWindow(await getConfig(env));
+    const a = await attemptRow(D, me.mid, w.weekStart);
+    if (Date.now() - a.alerted_at < 15 * 60000) return json({ ok: true, already: true });
+    const sent = await alertOutOfTries(env, D, me.mid, w.weekStart, true);
+    return json({ ok: true, pushed: sent > 0 });
+  }
+
+  if (path === '/me/history' && method === 'GET') {
+    const me = await bearer(request, env, 'member');
+    if (!me) return json({ error: 'Please log in again' }, 401);
+    const { results } = await D.prepare('SELECT week_start FROM submissions WHERE member_id = ? ORDER BY week_start DESC LIMIT 104')
+      .bind(me.mid).all();
+    return json({ weeks: results.map((r) => r.week_start), current: activeWindow(await getConfig(env)).weekStart });
+  }
+
+  if (path === '/me/practice' && method === 'POST') {
+    const me = await bearer(request, env, 'member');
+    if (!me) return json({ error: 'Please log in again' }, 401);
+    const body = await readBody(request);
+    if (!body?.audioBase64) return json({ error: 'Missing audio' }, 400);
+    const day = new Date(Date.now() + IST_MS).toISOString().slice(0, 10);
+    const row = await D.prepare('SELECT n FROM practice_use WHERE member_id = ? AND day = ?').bind(me.mid, day).first();
+    if ((row?.n ?? 0) >= PRACTICE_PER_DAY) return json({ error: `You've used today's ${PRACTICE_PER_DAY} voice checks. Try again tomorrow.`, left: 0 }, 429);
+    const bytes = base64ToBytes(body.audioBase64);
+    if (bytes.length > 600_000) return json({ error: 'Too long — record one verse at a time.' }, 413);
+    try {
+      const r = await callWhisper(env, bytes, String(body.mimeType || 'audio/webm'), 'ta', body.prompt);
+      await D.prepare(`INSERT INTO practice_use (member_id, day, n) VALUES (?, ?, 1)
+        ON CONFLICT(member_id, day) DO UPDATE SET n = n + 1`).bind(me.mid, day).run();
+      return json({ transcript: r.transcript, left: PRACTICE_PER_DAY - (row?.n ?? 0) - 1 });
+    } catch (e) {
+      return json({ error: 'Voice check failed. Try again.', detail: String(e.message || e) }, 502);
+    }
+  }
+
+  if (path === '/devices' && method === 'POST') {
+    const who = await bearer(request, env, 'any');
+    if (!who) return json({ error: 'Please log in again' }, 401);
+    const body = await readBody(request);
+    const token = String(body?.token || '').slice(0, 4096);
+    if (!token) return json({ error: 'Missing token' }, 400);
+    await D.prepare(`INSERT INTO devices (token, role, member_id, updated_at) VALUES (?, ?, ?, ?)
+      ON CONFLICT(token) DO UPDATE SET role = excluded.role, member_id = excluded.member_id, updated_at = excluded.updated_at`)
+      .bind(token, who.role, who.mid ?? null, Date.now()).run();
+    return json({ ok: true });
   }
 
   if (path === '/submissions' && method === 'POST') {
@@ -456,6 +647,8 @@ async function handleApi(request, env, path, url) {
     if (method === 'DELETE') {
       await D.batch([
         D.prepare('DELETE FROM submissions WHERE member_id = ?').bind(id),
+        D.prepare('DELETE FROM attempts WHERE member_id = ?').bind(id),
+        D.prepare("DELETE FROM devices WHERE role = 'member' AND member_id = ?").bind(id),
         D.prepare('DELETE FROM members WHERE id = ?').bind(id),
       ]);
       return json({ ok: true });
@@ -469,7 +662,7 @@ async function handleApi(request, env, path, url) {
       record_from: /^\d{2}:\d{2}$/.test(body.record_from || '') ? body.record_from : DEFAULT_CONFIG.record_from,
       record_to: /^\d{2}:\d{2}$/.test(body.record_to || '') ? body.record_to : DEFAULT_CONFIG.record_to,
       extend_days: String(Math.min(2, Math.max(0, Number(body.extend_days) || 0))),
-      max_takes: String(Math.min(5, Math.max(1, Number(body.max_takes) || 3))),
+      max_takes: String(Math.min(10, Math.max(1, Number(body.max_takes) || 5))),
     };
     await D.batch(Object.entries(clean).map(([k, v]) =>
       D.prepare('INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').bind(k, v)));
@@ -495,9 +688,45 @@ async function handleApi(request, env, path, url) {
       .bind(...sets.map((c) => body[c]), Number(subMatch[1])).run();
     return json({ ok: true });
   }
-  if (subMatch && method === 'DELETE') { // "allow re-record"
+  if (subMatch && method === 'DELETE') { // "allow re-record": the member gets all their tries back
+    const s = await D.prepare('SELECT member_id, week_start FROM submissions WHERE id = ?').bind(Number(subMatch[1])).first();
     await D.prepare('DELETE FROM submissions WHERE id = ?').bind(Number(subMatch[1])).run();
+    if (s) {
+      await D.prepare('UPDATE attempts SET used = 0, refunds = 0, alerted_at = 0 WHERE member_id = ? AND week_start = ?').bind(s.member_id, s.week_start).run();
+      await push(env, D, "role = 'member' AND member_id = ?", [s.member_id], {
+        title: 'You can record again', body: 'Your admin opened a new recording for you.', channel: 'daily-verse', data: { action: 'open-record' },
+      });
+    }
     return json({ ok: true });
+  }
+  const extraMatch = path.match(/^\/admin\/members\/(\d+)\/extra-try$/);
+  if (extraMatch && method === 'POST') {
+    const mid = Number(extraMatch[1]);
+    const week = activeWindow(await getConfig(env)).weekStart;
+    await D.prepare(`INSERT INTO attempts (member_id, week_start, bonus) VALUES (?, ?, 1)
+      ON CONFLICT(member_id, week_start) DO UPDATE SET bonus = bonus + 1, alerted_at = 0`).bind(mid, week).run();
+    await push(env, D, "role = 'member' AND member_id = ?", [mid], {
+      title: 'One more try 🙏', body: 'Your admin gave you another try. Record now.', channel: 'daily-verse', data: { action: 'open-record' },
+    });
+    return json({ ok: true, weekStart: week });
+  }
+  if (path === '/admin/needs-try' && method === 'GET') {
+    const cfg = await getConfig(env);
+    const w = activeWindow(cfg);
+    const { results } = await D.prepare(`SELECT m.id AS member_id, m.name, a.used, a.bonus, a.alerted_at
+      FROM attempts a JOIN members m ON m.id = a.member_id
+      LEFT JOIN submissions s ON s.member_id = a.member_id AND s.week_start = a.week_start
+      WHERE a.week_start = ? AND s.id IS NULL AND m.active = 1 AND a.used >= ? + a.bonus
+      ORDER BY a.alerted_at DESC`).bind(w.weekStart, Number(cfg.max_takes) || 5).all();
+    return json({ weekStart: w.weekStart, open: w.open, members: results });
+  }
+  if (path === '/admin/scores' && method === 'GET' && url.searchParams.get('full') === '1') {
+    // Grading log: everything needed to compare AI marks with the admin's (no audio).
+    const { results } = await D.prepare(`SELECT s.id, s.week_start, m.name, s.duration_s, s.takes, s.marks, s.engine,
+        s.transcript, s.auto_total, s.auto_json, s.manual_total, s.manual_note, s.graded_at, s.created_at
+      FROM submissions s JOIN members m ON m.id = s.member_id
+      WHERE s.auto_total IS NOT NULL OR s.manual_total IS NOT NULL ORDER BY s.week_start DESC, m.name LIMIT 1000`).all();
+    return json(results);
   }
   if (path === '/admin/scores' && method === 'GET') {
     const { results } = await D.prepare(`SELECT auto_total, manual_total FROM submissions

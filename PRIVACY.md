@@ -1,6 +1,6 @@
 # Privacy Policy — Powerful Weapon
 
-_Last updated: 2026-10-28_
+_Last updated: 2026-10-30_
 
 Powerful Weapon is a Tamil Bible-study tool. A group administrator uses it to
 choose weekly memory verses and grade members' recitation voice notes; group
@@ -42,12 +42,27 @@ listen and mark them.
 - A member can ask the administrator to delete their login and recordings at any
   time; deleting a member removes all their recordings and marks from the server.
 
+- The server also keeps, per member and week, how many recording tries were used,
+  so the try limit can't be reset by reinstalling the app.
+
+## Practice voice check
+On the Practice screen a member can say one verse aloud to check it. That short
+clip is sent to the speech-to-text provider (Groq Whisper) through the group's
+server, only to return the text; it is **not stored** and is **never** sent to the
+administrator. The server only counts how many checks a member used that day.
+
 ## Microphone
-The microphone is used only while a member presses Start on the Record screen.
+The microphone is used only while a member records on the Record screen or uses
+the Practice voice check.
 
 ## Notifications
-The app schedules local notifications on the device for the daily verse. No push
-service or device identifier is used.
+The app schedules local notifications on the device for the daily verse.
+It also uses **Firebase Cloud Messaging** (Google) for a few real-time messages:
+the administrator is alerted when a member has used all their tries, and members
+are told when new verses are published or when they get another try. For this the
+group's server stores the phone's push token together with the member's login (or
+the administrator role). The token is deleted when the member is removed, and it
+is not used for anything else.
 
 ## Voice notes and speech-to-text
 To grade a recitation, the app sends the **audio of an imported voice note** to a

@@ -1,13 +1,15 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { ReactNode, useEffect, useState } from 'react';
 import { useRole } from '../lib/role';
+import { useT } from '../lib/prefs';
+import type { StringKey } from '../lib/strings';
 import ErrorBoundary from './ErrorBoundary';
 import { cx } from './ui';
 import {
   IconBook, IconBrain, IconHome, IconMic, IconMore, IconSettings, IconTrophy, IconUsers,
 } from './icons';
 
-interface NavItem { to: string; label: string; icon: () => JSX.Element; match?: string[] }
+interface NavItem { to: string; label: string; icon: () => JSX.Element; match?: string[]; key?: StringKey }
 
 // Phone: bottom tabs (thumb reach, always visible). Desktop: the same items in a sidebar.
 const ADMIN_TABS: NavItem[] = [
@@ -24,17 +26,12 @@ const ADMIN_SIDEBAR: NavItem[] = [
 ];
 // Members get a deliberately small app: study, practise, record, see who sent.
 const MEMBER_TABS: NavItem[] = [
-  { to: '/today', label: 'Verses', icon: IconBook },
-  { to: '/practice', label: 'Practice', icon: IconBrain },
-  { to: '/record', label: 'Record', icon: IconMic },
-  { to: '/group', label: 'Group', icon: IconUsers },
+  { to: '/today', label: 'Verses', icon: IconBook, key: 'tab.verses' },
+  { to: '/practice', label: 'Practice', icon: IconBrain, key: 'tab.practice' },
+  { to: '/record', label: 'Record', icon: IconMic, key: 'tab.record' },
+  { to: '/group', label: 'Group', icon: IconUsers, key: 'tab.group' },
 ];
 
-const TITLES: Record<string, string> = {
-  '/dashboard': 'Home', '/verses': 'Verse Picker', '/voice-inbox': 'Voice Inbox',
-  '/leaderboards': 'Leaderboards', '/more': 'More', '/users': 'Members', '/settings': 'Settings',
-  '/today': 'Verses', '/practice': 'Practice', '/record': 'Record', '/group': 'Group',
-};
 
 /** Hide the bottom bar while the on-screen keyboard is up (it would ride on top of it). */
 function useKeyboardOpen(): boolean {
@@ -53,8 +50,8 @@ function Brand({ compact }: { compact?: boolean }) {
     <div className="flex items-center gap-2.5 min-w-0">
       <img src="brand/icon-192.png" alt="" className={cx('rounded-xl shrink-0', compact ? 'w-9 h-9' : 'w-10 h-10')} />
       <div className="min-w-0 leading-tight">
-        <div className="text-[15px] font-semibold text-white truncate">Powerful Weapon</div>
-        <div className="tamil text-[11px] text-gold-300 truncate" style={{ lineHeight: 1.3 }}>கர்த்தருடைய வார்த்தை</div>
+        <div className="text-[0.9375rem] font-semibold text-white truncate">Powerful Weapon</div>
+        <div className="tamil text-[0.6875rem] text-gold-300 truncate" style={{ lineHeight: 1.3 }}>கர்த்தருடைய வார்த்தை</div>
       </div>
     </div>
   );
@@ -62,11 +59,12 @@ function Brand({ compact }: { compact?: boolean }) {
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { role } = useRole();
+  const t = useT();
+  const label = (item: NavItem) => (item.key ? t(item.key) : item.label);
   const loc = useLocation();
   const keyboardOpen = useKeyboardOpen();
   const tabs = role === 'member' ? MEMBER_TABS : ADMIN_TABS;
-  const sidebar = role === 'member' ? [...MEMBER_TABS, { to: '/settings', label: 'Settings', icon: IconSettings }] : ADMIN_SIDEBAR;
-  const title = TITLES[loc.pathname] ?? '';
+  const sidebar = role === 'member' ? [...MEMBER_TABS, { to: '/settings', label: 'Settings', icon: IconSettings, key: 'tab.settings' as StringKey }] : ADMIN_SIDEBAR;
 
   // Scroll to top on tab change (the scroller is <main>, not the window).
   useEffect(() => { document.getElementById('app-main')?.scrollTo(0, 0); }, [loc.pathname]);
@@ -87,7 +85,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               )}
             >
               <item.icon />
-              {item.label}
+              {label(item)}
             </NavLink>
           ))}
         </nav>
@@ -101,7 +99,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             <Brand compact />
             {role === 'member' ? (
               <NavLink to="/settings" aria-label="Settings" className="w-10 h-10 -mr-2 grid place-items-center text-white/80"><IconSettings /></NavLink>
-            ) : title && <span className="text-xs text-white/60 truncate">{title}</span>}
+            ) : null}
           </div>
         </header>
 
@@ -127,8 +125,8 @@ export default function Layout({ children }: { children: ReactNode }) {
                     )}>
                       <item.icon />
                     </span>
-                    <span className={cx('text-[11px] leading-none truncate', active ? 'text-brand-800 font-semibold' : 'text-gray-500')}>
-                      {item.label}
+                    <span className={cx('text-[0.6875rem] leading-none truncate', active ? 'text-brand-800 font-semibold' : 'text-gray-500')}>
+                      {label(item)}
                     </span>
                   </NavLink>
                 );

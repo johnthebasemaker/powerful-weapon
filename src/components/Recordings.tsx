@@ -3,8 +3,11 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { addDays, weekdayLabel } from '../lib/dates';
 import {
-  allowRedo, fetchAudio, fmtWhen, getConfig, groupStatus, GroupRow, listSubmissions, RecordWindow, Submission, updateSubmission,
+  allowRedo, fetchAudio, fmtWhen, getConfig, giveExtraTry, groupStatus, GroupRow, listSubmissions, needsTry, NeedsTry, RecordWindow,
+  Submission, updateSubmission,
 } from '../lib/remote';
+import { PUSH_EVENT } from '../lib/push';
+import { shareText } from '../lib/share';
 import { applyCalibration, autoMark, Calibration, Engine, loadCalibration, MarkResult, syncToLeaderboard, WeekVerse } from '../lib/autoMark';
 import { isNative } from '../lib/platform';
 import { toast } from '../lib/toast';
@@ -29,6 +32,7 @@ export default function Recordings() {
   const [busy, setBusy] = useState<Record<number, string>>({});
   const [error, setError] = useState('');
   const [phones, setPhones] = useState<Record<string, string>>({});
+  const [needs, setNeeds] = useState<NeedsTry[]>([]);
 
   // First load: start on the week whose recording window is open / most recent.
   useEffect(() => {
@@ -58,6 +62,41 @@ export default function Recordings() {
     } catch (e: any) { setError(e.message); }
   }, [week]);
   useEffect(() => { load(); }, [load]);
+
+  // Members out of tries — refreshed live when a push alert arrives.
+  const loadNeeds = useCallback(() => { needsTry().then((r) => setNeeds(r.members)).catch(() => {}); }, []);
+  useEffect(() => {
+    loadNeeds();
+    const on = () => { loadNeeds(); load(); };
+    window.addEventListener(PUSH_EVENT, on);
+    return () => window.removeEventListener(PUSH_EVENT, on);
+  }, [loadNeeds, load]);
+
+  async function extraTry(memberId: number, name: string) {
+    try {
+      await giveExtraTry(memberId);
+      toast(`${name} has one more try`, 'success');
+      loadNeeds();
+    } catch (e: any) { toast(e.message, 'error', 5000); }
+  }
+
+  /** Week summary for the WhatsApp group: who sent, and optionally the top 3 (ranks only, no marks). */
+  function shareResults(withRanks: boolean) {
+    const sentNames = subs.map((s) => s.name);
+    const notSent = missing.map((g) => g.name);
+    const score = (s: Submission) => s.manual_total ?? (s.auto_total != null ? applyCalibration(useCalib ? calib : null, s.auto_total) : null);
+    const ranked = subs.filter((s) => score(s) != null).sort((a, b) => (score(b) ?? 0) - (score(a) ?? 0)).slice(0, 3);
+    const lines = [
+      `📖 *Powerful Weapon* — week of ${dayLabel(week)}`,
+      '',
+      `✅ Sent (${sentNames.length}/${group.length}): ${sentNames.join(', ') || '—'}`,
+      ...(notSent.length ? [`⏳ Not sent: ${notSent.join(', ')}`] : []),
+      ...(withRanks && ranked.length ? ['', '🏆 *Top recitations*', ...ranked.map((s, i) => `${['🥇', '🥈', '🥉'][i]} ${s.name}`)] : []),
+      '',
+      'உலகத்தில் பெரிய போராயுதம் கர்த்தருடைய வார்த்தை 🙏',
+    ];
+    shareText(lines.join('\n'));
+  }
 
   const missing = useMemo(() => group.filter((g) => !g.submission_id), [group]);
 
@@ -102,7 +141,7 @@ export default function Recordings() {
   }
 
   async function redo(s: Submission) {
-    if (!confirm(`Delete ${s.name}'s recording so they can record again? Their marks for this week are removed too.`)) return;
+    if (!confirm(`Delete ${s.name}'s recording so they can record again? They get all their tries back; their marks for this week are removed.`)) return;
     await allowRedo(s.id);
     load();
   }
@@ -159,7 +198,7 @@ export default function Recordings() {
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" className="w-10 px-0" onClick={() => setWeek(addDays(week, -7))} aria-label="Previous week"><IconChevronLeft /></Button>
           <div className="flex-1 text-center min-w-0">
-            <div className="text-[15px] font-semibold truncate">{week ? `${dayLabel(week)} – ${dayLabel(addDays(week, 6))}` : '…'}</div>
+            <div className="text-[0.9375rem] font-semibold truncate">{week ? `${dayLabel(week)} – ${dayLabel(addDays(week, 6))}` : '…'}</div>
             <div className="text-xs text-gray-500">{subs.length} of {group.length} members sent</div>
           </div>
           <Button variant="secondary" size="sm" className="w-10 px-0" onClick={() => setWeek(addDays(week, 7))} aria-label="Next week"><IconChevronRight /></Button>
@@ -176,9 +215,32 @@ export default function Recordings() {
         </div>
         <div className="grid grid-cols-2 gap-2">
           <Button variant="secondary" size="sm" onClick={backup}><IconUpload /> Backup</Button>
-          <Button variant="secondary" size="sm" onClick={load}><IconRefresh /> Refresh</Button>
+          <Button variant="secondary" size="sm" onClick={() => { load(); loadNeeds(); }}><IconRefresh /> Refresh</Button>
         </div>
+        {subs.length > 0 && (
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" size="sm" onClick={() => shareResults(false)}><IconSend /> Share list</Button>
+            <Button variant="secondary" size="sm" onClick={() => shareResults(true)}><IconSend /> Share + top 3</Button>
+          </div>
+        )}
       </Card>
+
+      {needs.length > 0 && (
+        <section>
+          <SectionTitle>Needs a try ({needs.length})</SectionTitle>
+          <Card pad={false} className="divide-y divide-red-100 overflow-hidden border-red-200 bg-red-50/60">
+            {needs.map((n) => (
+              <div key={n.member_id} className="flex items-center gap-3 px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[0.9375rem] font-medium truncate">{n.name}</div>
+                  <div className="text-xs text-red-700">Used all {n.used} tries · not sent</div>
+                </div>
+                <Button size="sm" onClick={() => extraTry(n.member_id, n.name)}>Give 1 more try</Button>
+              </div>
+            ))}
+          </Card>
+        </section>
+      )}
 
       {error && <Notice tone="error">{error}</Notice>}
       {verses.length !== 7 && week && !error && (
@@ -204,7 +266,8 @@ export default function Recordings() {
           <Card pad={false} className="divide-y divide-gray-100 overflow-hidden">
             {missing.map((g) => (
               <div key={g.member_id} className="flex items-center gap-3 px-4 py-3">
-                <span className="flex-1 text-[15px] truncate">{g.name}</span>
+                <span className="flex-1 text-[0.9375rem] truncate">{g.name}</span>
+                <Button size="sm" variant="ghost" onClick={() => extraTry(g.member_id, g.name)} aria-label={`Give ${g.name} one more try`}>+1 try</Button>
                 <Button size="sm" variant="secondary" onClick={() => remind(g)}><IconSend /> Remind</Button>
               </div>
             ))}
@@ -236,11 +299,11 @@ function SubmissionCard({ s, busy, calib, verses, expiry, onMark, onManual, onRe
           <div className="text-xs text-gray-500">
             {Math.round(s.duration_s ?? 0)}s · try {s.takes ?? 1} · {Math.min(7, marks.length)}/7 verses marked
           </div>
-          <div className="text-[11px] text-gray-400">{s.audio_available ? `Audio kept until ${expiry}` : 'Audio removed after 8 weeks'}</div>
+          <div className="text-[0.6875rem] text-gray-400">{s.audio_available ? `Audio kept until ${expiry}` : 'Audio removed after 8 weeks'}</div>
         </div>
         <div className="text-right shrink-0">
           <div className="text-2xl font-bold text-brand-800 leading-none">{final != null ? final.toFixed(1) : '—'}</div>
-          <div className="text-[11px] text-gray-500 mt-1">{s.manual_total != null ? 'your mark' : auto != null ? `auto · ${s.engine}` : 'not marked'}</div>
+          <div className="text-[0.6875rem] text-gray-500 mt-1">{s.manual_total != null ? 'your mark' : auto != null ? `auto · ${s.engine}` : 'not marked'}</div>
         </div>
       </div>
 
@@ -261,20 +324,20 @@ function SubmissionCard({ s, busy, calib, verses, expiry, onMark, onManual, onRe
 
           {parsed.result && (
             <div>
-              <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Auto marks per verse ({parsed.result.engine}{parsed.result.split ? '' : ', no verse marks'})</div>
+              <div className="text-[0.6875rem] uppercase tracking-wide text-gray-500 mb-1">Auto marks per verse ({parsed.result.engine}{parsed.result.split ? '' : ', no verse marks'})</div>
               <div className="rounded-xl border border-gray-100 divide-y divide-gray-100">
                 {parsed.result.perVerse.map((p) => (
                   <div key={p.slot} className="px-3 py-2">
                     <div className="flex items-center gap-3">
                       <span className="w-9 text-xs font-semibold text-gray-600">{weekdayLabel(p.slot)}</span>
-                      <span className="flex-1 text-[11px] text-gray-500">Acc {p.accuracy.toFixed(0)}/60 · Flu {p.fluency.toFixed(0)}/25 · Ref {p.reference}/15</span>
+                      <span className="flex-1 text-[0.6875rem] text-gray-500">Acc {p.accuracy.toFixed(0)}/60 · Flu {p.fluency.toFixed(0)}/25 · Ref {p.reference}/15</span>
                       <span className="text-sm font-bold w-10 text-right">{p.total.toFixed(0)}</span>
                     </div>
-                    {p.transcript && <div className="tamil text-[13px] text-gray-600 mt-1">{p.transcript}</div>}
+                    {p.transcript && <div className="tamil text-[0.8125rem] text-gray-600 mt-1">{p.transcript}</div>}
                   </div>
                 ))}
               </div>
-              {!parsed.result.split && s.transcript && <div className="tamil text-[13px] text-gray-600 bg-gray-50 rounded-xl p-3 mt-2">{s.transcript}</div>}
+              {!parsed.result.split && s.transcript && <div className="tamil text-[0.8125rem] text-gray-600 bg-gray-50 rounded-xl p-3 mt-2">{s.transcript}</div>}
             </div>
           )}
 

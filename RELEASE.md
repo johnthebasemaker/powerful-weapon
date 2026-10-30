@@ -51,6 +51,15 @@ same folder under App bundle explorer → (version) → Downloads → Native deb
 The only native code is the prebuilt, already-stripped `libsqlcipher.so`, so a full
 symbol file doesn't exist; this zip gives function names and clears the warning.
 
+Push notifications (admin alerts) are built in only when `android/app/google-services.json`
+exists — the build prints "push notifications ON". Get it from the Firebase console
+(Project settings → Your apps → Android `com.andrewjohnson.powerfulweapon`). It is
+gitignored. The Worker also needs the service-account key once:
+`cd stt-proxy && npx wrangler secret put FCM_SERVICE_ACCOUNT < path/to/key.json`.
+
+Store listing images: `resources/store/` (phone, 7" and 10" tablet screenshots,
+512 icon, 1024×500 feature graphic). Regenerate after big UI changes.
+
 Toolchain (no Android Studio needed): JDK 21 in `~/Library/Java/JavaVirtualMachines`,
 Android SDK in `~/Library/Android/sdk` (platform 36, build-tools 36).
 

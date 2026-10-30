@@ -93,10 +93,10 @@ export default function Leaderboards() {
               )}>
                 {i + 1}
               </span>
-              <span className="flex-1 min-w-0 text-[15px] font-medium truncate">{r.name}</span>
+              <span className="flex-1 min-w-0 text-[0.9375rem] font-medium truncate">{r.name}</span>
               <span className="text-right shrink-0">
                 <span className="block text-base font-bold text-brand-800 leading-tight">{r.main}</span>
-                <span className="block text-[11px] text-gray-500">{r.sub}</span>
+                <span className="block text-[0.6875rem] text-gray-500">{r.sub}</span>
               </span>
             </div>
           ))}

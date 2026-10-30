@@ -53,6 +53,10 @@ async function call<T>(method: string, path: string, body?: unknown, token?: str
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const d = data as { error?: string; detail?: string };
+    if (res.status === 401 && path.startsWith('/admin/') && token) {
+      await api().settings.set('admin_token', ''); // expired or password changed → one fresh login
+      window.dispatchEvent(new Event('pw-admin-signed-out'));
+    }
     throw new RemoteError(`${d.error ?? `Server error (HTTP ${res.status})`}${d.detail ? ` — ${d.detail.slice(0, 160)}` : ''}`, res.status);
   }
   return data as T;
@@ -83,6 +87,7 @@ async function anyToken(): Promise<string> {
 export async function loginAdmin(password: string): Promise<void> {
   const { token } = await call<{ token: string }>('POST', '/auth/admin', { password });
   await api().settings.set('admin_token', token);
+  window.dispatchEvent(new Event('pw-login'));
 }
 
 export async function logoutAdmin(): Promise<void> {
@@ -94,6 +99,7 @@ export async function loginMember(memberId: number, pin: string): Promise<Public
   await api().settings.set('member_token', token);
   await api().settings.set('member_id', String(member.id));
   await api().settings.set('member_name', member.name);
+  window.dispatchEvent(new Event('pw-login'));
   return member;
 }
 
@@ -107,9 +113,27 @@ export const getConfig = () => call<RecordConfig>('GET', '/config');
 /* ── member ── */
 
 export interface MyStatus {
-  member: PublicMember; window: RecordWindow; maxTakes: number; sent: { id: number; created_at: string } | null;
+  member: PublicMember; window: RecordWindow; maxTakes: number; takesUsed: number; refundsLeft: number;
+  sent: { id: number; created_at: string } | null;
 }
 export const myStatus = async () => call<MyStatus>('GET', '/me/status', undefined, await memberToken());
+
+/** Start a try: the server counts it (so reinstalling the app doesn't reset tries). */
+export const startTake = async (weekStart: string) =>
+  call<{ takesUsed: number; maxTakes: number }>('POST', '/me/take', { weekStart }, await memberToken());
+/** A take was cancelled; `interrupted` (call, alarm, screen off) asks for the try back. */
+export const cancelTake = async (weekStart: string, interrupted: boolean, micFailed = false) =>
+  call<{ refunded: boolean; takesUsed: number; maxTakes: number; refundsLeft: number }>(
+    'POST', '/me/take/cancel', { weekStart, interrupted, micFailed }, await memberToken());
+export const requestTry = async () => call<{ ok: true; pushed?: boolean; already?: boolean }>('POST', '/me/request-try', {}, await memberToken());
+export const myHistory = async () => call<{ weeks: string[]; current: string }>('GET', '/me/history', undefined, await memberToken());
+export const practiceCheck = async (p: { audioBase64: string; mimeType: string; prompt?: string }) =>
+  call<{ transcript: string; left: number }>('POST', '/me/practice', p, await memberToken(), 90000);
+
+/** Register this phone for push notifications (admin alerts / member news). */
+export async function registerDevice(token: string): Promise<void> {
+  await call('POST', '/devices', { token }, await anyToken());
+}
 
 export async function submitRecording(p: {
   weekStart: string; audioBase64: string; mimeType: string; durationS: number; takes: number; marks: number[];
@@ -146,6 +170,12 @@ export const listSubmissions = async (week: string) =>
 export const updateSubmission = async (id: number, patch: Partial<Submission>) =>
   call('PATCH', `/admin/submissions/${id}`, patch, await adminToken());
 export const allowRedo = async (id: number) => call('DELETE', `/admin/submissions/${id}`, undefined, await adminToken());
+export const giveExtraTry = async (memberId: number) =>
+  call<{ ok: true }>('POST', `/admin/members/${memberId}/extra-try`, {}, await adminToken());
+export interface NeedsTry { member_id: number; name: string; used: number; bonus: number; alerted_at: number }
+export const needsTry = async () =>
+  call<{ weekStart: string; open: boolean; members: NeedsTry[] }>('GET', '/admin/needs-try', undefined, await adminToken());
+export const gradingLog = async () => call<Submission[]>('GET', '/admin/scores?full=1', undefined, await adminToken());
 export const scorePairs = async () =>
   call<{ auto_total: number; manual_total: number }[]>('GET', '/admin/scores', undefined, await adminToken());
 

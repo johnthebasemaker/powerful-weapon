@@ -119,7 +119,7 @@ function AppMembers({ contacts, onLocalChange }: { contacts: User[]; onLocalChan
               <span className={cx('w-10 h-10 rounded-full grid place-items-center font-semibold shrink-0',
                 m.active ? 'bg-brand-100 text-brand-800' : 'bg-gray-100 text-gray-400')}>{m.name.trim().charAt(0).toUpperCase()}</span>
               <div className="flex-1 min-w-0">
-                <div className={cx('text-[15px] font-medium truncate', !m.active && 'text-gray-400')}>{m.name}</div>
+                <div className={cx('text-[0.9375rem] font-medium truncate', !m.active && 'text-gray-400')}>{m.name}</div>
                 <button className="text-xs text-brand-700 font-medium" onClick={() => newPin(m)}>New PIN</button>
               </div>
               <button onClick={async () => { await updateMember(m.id, { active: !m.active }); load(); }}
@@ -195,7 +195,7 @@ function Contacts({ users, reload }: { users: User[]; reload: () => void }) {
           {users.map((u) => (
             <div key={u.id} className="flex items-center gap-3 px-4 py-3">
               <div className="flex-1 min-w-0">
-                <div className="text-[15px] font-medium truncate">{u.name}</div>
+                <div className="text-[0.9375rem] font-medium truncate">{u.name}</div>
                 <div className="text-xs text-gray-500 truncate">{u.phone}</div>
               </div>
               <button onClick={async () => { if (confirm(`Remove ${u.name}? Their grades stay in history.`)) { await api().users.delete(u.id); reload(); } }}

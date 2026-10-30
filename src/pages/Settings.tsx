@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { api } from '../lib/api';
 import { DEFAULT_FEED_URL, lastPublished, publishWeek, refreshFeed } from '../lib/feed';
-import { fmtWhen, getConfig, loginAdmin, logoutAdmin, RecordConfig, saveConfig, scorePairs } from '../lib/remote';
+import { fmtWhen, getConfig, gradingLog, loginAdmin, logoutAdmin, RecordConfig, saveConfig, scorePairs } from '../lib/remote';
+import { saveTextFile } from '../lib/exportFile';
 import { Calibration, fitCalibration } from '../lib/autoMark';
 import AdminGate from '../components/AdminGate';
 import { currentWeekStart } from '../lib/dates';
@@ -14,6 +15,7 @@ import { cachedFeed } from '../lib/feed';
 import { toast } from '../lib/toast';
 import { Badge, Button, Card, Field, Input, Notice, PageHeader, SectionTitle, Segmented, Select, dayLabel } from '../components/ui';
 import type { Settings } from '../types';
+import { usePrefs, useT } from '../lib/prefs';
 
 const APP_VERSION = '0.0.5';
 
@@ -151,6 +153,7 @@ function AdminSettings() {
         </p>
       </Card>
 
+      <DisplayCard />
       {isNative() && <SwitchModeCard to="member" />}
       <About />
     </div>
@@ -255,9 +258,10 @@ function RecordingWindowCard() {
             <Segmented value={cfg.extend_days} onChange={(v) => set('extend_days', v)}
               options={[{ value: '0', label: 'None' }, { value: '1', label: '+1 day' }, { value: '2', label: '+2 days' }]} />
           </Field>
-          <Field label="Tries per member">
-            <Segmented value={cfg.max_takes} onChange={(v) => set('max_takes', v)}
-              options={['1', '2', '3', '4', '5'].map((n) => ({ value: n, label: n }))} />
+          <Field label="Tries per member" hint="You can give a member one more try any time from Voice → Needs a try.">
+            <Select value={cfg.max_takes} onChange={(e) => set('max_takes', e.target.value)}>
+              {Array.from({ length: 10 }, (_, i) => String(i + 1)).map((n) => <option key={n} value={n}>{n} {n === '1' ? 'try' : 'tries'}{n === '5' ? ' (default)' : ''}</option>)}
+            </Select>
           </Field>
           <Notice tone={cfg.window.open ? 'ok' : 'info'}>
             {cfg.window.open ? `Open now — closes ${fmtWhen(cfg.window.closesAt)}` : `Next: ${fmtWhen(cfg.window.opensAt)} → ${fmtWhen(cfg.window.closesAt)}`}
@@ -274,6 +278,29 @@ function MarkingCard() {
   const [useCalib, setUseCalib] = useState(true);
   const [calib, setCalib] = useState<Calibration | null>(null);
   const [pairs, setPairs] = useState(0);
+
+  async function exportLog() {
+    try {
+      const rows = await gradingLog();
+      const weeks = Array.from(new Set(rows.map((r) => r.week_start)));
+      const verses: Record<string, unknown[]> = {};
+      for (const w of weeks) {
+        verses[w] = ((await api().selections.get(w)) as any[]).map((x) => ({ slot: x.slot, ref: `${x.book} ${x.chapter}:${x.verse}`, text: x.text_tamil }));
+      }
+      const log = {
+        exportedAt: new Date().toISOString(), app: APP_VERSION, calibration: calib, engineSetting: engine,
+        summary: {
+          recordings: rows.length,
+          bothMarked: rows.filter((r) => r.auto_total != null && r.manual_total != null).length,
+          avgGap: (() => { const p = rows.filter((r) => r.auto_total != null && r.manual_total != null); return p.length ? +(p.reduce((a, r) => a + Math.abs(r.auto_total! - r.manual_total!), 0) / p.length).toFixed(1) : null; })(),
+        },
+        verses,
+        recordings: rows.map((r) => ({ ...r, auto_json: (() => { try { return JSON.parse(r.auto_json || 'null'); } catch { return r.auto_json; } })() })),
+      };
+      await saveTextFile(`grading-log-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(log, null, 1), 'application/json');
+      toast(`Exported ${rows.length} recordings`, 'success');
+    } catch (e: any) { toast(e.message, 'error', 5000); }
+  }
 
   useEffect(() => {
     api().settings.getAll().then((s: any) => { setEngine(s.mark_engine || 'whisper'); setUseCalib(s.use_calibration !== 'false'); });
@@ -299,6 +326,13 @@ function MarkingCard() {
           ? `Learnt from ${calib.n} recordings you marked: average gap ${calib.maeBefore.toFixed(1)} → ${calib.maeAfter.toFixed(1)} points.`
           : `Give your own mark to ${Math.max(0, 8 - pairs)} more auto-marked recording${8 - pairs === 1 ? '' : 's'} to start learning (${pairs}/8).`}
       </p>
+      <div className="rounded-xl bg-gray-50 p-3 space-y-2">
+        <p className="text-sm text-gray-700 leading-relaxed">
+          <strong>Grading log</strong> — every recording with the AI's mark, what it heard, and your mark. During a trial,
+          auto-mark <em>and</em> give your own mark to each recording, then export this and send it to the developer to tune the marking.
+        </p>
+        <Button variant="secondary" block onClick={exportLog}>Export grading log</Button>
+      </div>
     </Card>
   );
 }
@@ -306,6 +340,7 @@ function MarkingCard() {
 /* ───────────────────────── Member ───────────────────────── */
 
 function MemberSettings() {
+  const t = useT();
   const [settings, setSettings] = useState<Settings>({});
   const [time, setTime] = useState('06:00');
   const [refreshing, setRefreshing] = useState(false);
@@ -322,7 +357,7 @@ function MemberSettings() {
     await api().settings.set('member_time', v);
     setTime(v);
     await refreshNotifications();
-    toast(`Reminder set for ${fmtTime(v)}`, 'success', 1800);
+    toast(t('settings.reminderSet', { time: fmtTime(v) }), 'success', 1800);
   }
 
   async function useGroupTime() {
@@ -342,7 +377,7 @@ function MemberSettings() {
     const r = await refreshFeed();
     await refreshNotifications();
     setRefreshing(false);
-    toast(r.error ?? 'Verses updated', r.error ? 'error' : 'success');
+    toast(r.error ?? t('settings.updated'), r.error ? 'error' : 'success');
     load();
   }
 
@@ -350,35 +385,37 @@ function MemberSettings() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Settings" />
+      <PageHeader title={t('settings.title')} />
+
+      <DisplayCard member />
 
       <Card className="space-y-4">
         <SectionTitle
           action={
             <label className="inline-flex items-center gap-2 text-sm">
               <input type="checkbox" className="w-5 h-5 accent-brand-600" checked={enabled} onChange={(e) => toggle(e.target.checked)} />
-              {enabled ? 'On' : 'Off'}
+              {enabled ? t('common.on') : t('common.off')}
             </label>
           }
         >
-          Daily reminder
+          {t('settings.reminder')}
         </SectionTitle>
-        <Field label="Reminder time" hint={settings.member_time ? 'Your own time.' : "Using your group's send time."}>
+        <Field label={t('settings.reminderTime')} hint={settings.member_time ? t('settings.ownTime') : t('settings.groupTime')}>
           <Input type="time" value={time} disabled={!enabled} onChange={(e) => changeTime(e.target.value)} />
         </Field>
-        {settings.member_time && <button className="text-sm text-brand-700 font-medium" onClick={useGroupTime}>Use the group's time instead</button>}
+        {settings.member_time && <button className="text-sm text-brand-700 font-medium" onClick={useGroupTime}>{t('settings.useGroupTime')}</button>}
       </Card>
 
       {isNative() && <NotificationsCard />}
 
       <Card className="space-y-3">
-        <SectionTitle>Verses</SectionTitle>
+        <SectionTitle>{t('settings.verses')}</SectionTitle>
         <p className="text-sm text-gray-600">
           {settings.feed_fetched_at
-            ? `Last updated ${new Date(settings.feed_fetched_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}.`
-            : 'Not downloaded yet.'}
+            ? t('settings.lastUpdated', { when: new Date(settings.feed_fetched_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) })
+            : t('settings.notDownloaded')}
         </p>
-        <Button variant="secondary" block onClick={refreshNow} disabled={refreshing}>{refreshing ? 'Updating…' : 'Update verses now'}</Button>
+        <Button variant="secondary" block onClick={refreshNow} disabled={refreshing}>{refreshing ? t('settings.updating') : t('settings.updateNow')}</Button>
       </Card>
 
       <MemberAccountCard name={settings.member_name} />
@@ -391,6 +428,7 @@ function MemberSettings() {
 /* ───────────────────────── Shared ───────────────────────── */
 
 function NotificationsCard() {
+  const t = useT();
   const [perm, setPerm] = useState<string>('…');
   const [exact, setExact] = useState<'granted' | 'denied' | 'na'>('na');
   const [scheduled, setScheduled] = useState<number | null>(null);
@@ -419,42 +457,42 @@ function NotificationsCard() {
     await LocalNotifications.schedule({
       notifications: [{
         id: 999, channelId: 'daily-verse', smallIcon: 'ic_stat_verse', iconColor: '#1F6158',
-        title: 'Test notification', body: 'If you can see this, daily verses will arrive here.',
+        title: t('notif.testTitle'), body: t('notif.testBody'),
         schedule: { at: new Date(Date.now() + 5000), allowWhileIdle: true },
       }],
     });
-    toast('A test notification will arrive in 5 seconds — you can lock the phone.', 'info', 5000);
+    toast(t('notif.testToast'), 'info', 5000);
   }
 
   return (
     <Card className="space-y-3">
-      <SectionTitle>Notifications</SectionTitle>
-      <StatusRow label="Notifications" ok={perm === 'granted'} okText="Allowed" badText={perm === 'denied' ? 'Blocked' : 'Not allowed'}
-        action={perm !== 'granted' && <Button size="sm" onClick={allow}>Allow</Button>} />
+      <SectionTitle>{t('notif.title')}</SectionTitle>
+      <StatusRow label={t('notif.title')} ok={perm === 'granted'} okText={t('notif.allowed')} badText={perm === 'denied' ? t('notif.blocked') : t('notif.notAllowed')}
+        action={perm !== 'granted' && <Button size="sm" onClick={allow}>{t('notif.allow')}</Button>} />
       {exact !== 'na' && (
-        <StatusRow label="Exact time" ok={exact === 'granted'} okText="On time" badText="May be late"
-          action={exact !== 'granted' && <Button size="sm" variant="secondary" onClick={async () => { await requestExactAlarm(); check(); }}>Fix</Button>} />
+        <StatusRow label={t('notif.exact')} ok={exact === 'granted'} okText={t('notif.onTime')} badText={t('notif.mayBeLate')}
+          action={exact !== 'granted' && <Button size="sm" variant="secondary" onClick={async () => { await requestExactAlarm(); check(); }}>{t('notif.fix')}</Button>} />
       )}
       {scheduled !== null && perm === 'granted' && (
-        <p className="text-xs text-gray-500">{scheduled} upcoming daily notifications are scheduled.</p>
+        <p className="text-xs text-gray-500">{t('notif.scheduled', { n: scheduled })}</p>
       )}
       {perm === 'denied' && (
-        <Notice tone="warn">Notifications are blocked. Open phone <strong>Settings → Apps → Powerful Weapon → Notifications</strong> and turn them on.</Notice>
+        <Notice tone="warn">{t('notif.blockedHelp')}</Notice>
       )}
       <div className="grid grid-cols-2 gap-2">
-        <Button variant="secondary" onClick={test}>Send a test</Button>
-        <Button variant="secondary" onClick={() => setShowBattery(!showBattery)}>Battery tips</Button>
+        <Button variant="secondary" onClick={test}>{t('notif.test')}</Button>
+        <Button variant="secondary" onClick={() => setShowBattery(!showBattery)}>{t('notif.battery')}</Button>
       </div>
       {showBattery && (
         <div className="text-sm text-gray-700 bg-gray-50 rounded-xl p-3 space-y-2 leading-relaxed">
-          <p>Some phones stop apps in the background to save battery, which delays the daily verse. Allow Powerful Weapon to run:</p>
+          <p>{t('notif.batteryIntro')}</p>
           <ul className="list-disc pl-5 space-y-1">
             <li><strong>Oppo / Realme / OnePlus:</strong> Settings → Battery → App battery management (or More settings) → Powerful Weapon → allow <em>Auto launch</em> and <em>Background activity</em>.</li>
             <li><strong>Vivo / iQOO:</strong> Settings → Battery → Background power consumption → Powerful Weapon → Allow.</li>
             <li><strong>Xiaomi / Redmi / Poco:</strong> Settings → Apps → Powerful Weapon → Autostart on, Battery saver → No restrictions.</li>
             <li><strong>Samsung:</strong> Settings → Battery → Background usage limits → Never sleeping apps → add Powerful Weapon.</li>
           </ul>
-          <p className="text-xs text-gray-500">Then tap “Send a test” and lock the phone to check.</p>
+          <p className="text-xs text-gray-500">{t('notif.batteryAfter')}</p>
         </div>
       )}
     </Card>
@@ -463,11 +501,35 @@ function NotificationsCard() {
 
 function MemberAccountCard({ name }: { name?: string }) {
   const { signOutMember } = useRole();
+  const t = useT();
   return (
     <Card>
-      <SectionTitle>Account</SectionTitle>
-      <p className="text-sm text-gray-600 mb-3">Logged in as <strong>{name || 'member'}</strong>.</p>
-      <Button variant="secondary" block onClick={async () => { if (confirm('Log out of this phone?')) await signOutMember(); }}>Log out</Button>
+      <SectionTitle>{t('settings.account')}</SectionTitle>
+      <p className="text-sm text-gray-600 mb-3">{t('settings.loggedInAs', { name: name || '—' })}</p>
+      <Button variant="secondary" block onClick={async () => { if (confirm(t('settings.logoutConfirm'))) await signOutMember(); }}>{t('settings.logout')}</Button>
+    </Card>
+  );
+}
+
+function DisplayCard({ member }: { member?: boolean }) {
+  const t = useT();
+  const { lang, textSize, theme, set } = usePrefs();
+  return (
+    <Card className="space-y-4">
+      <SectionTitle>{t('settings.display')}</SectionTitle>
+      {member && (
+        <Field label={t('settings.language')}>
+          <Segmented value={lang} onChange={(v) => set('ui_lang', v)} options={[{ value: 'en', label: 'English' }, { value: 'ta', label: 'தமிழ்' }]} />
+        </Field>
+      )}
+      <Field label={t('settings.textSize')}>
+        <Segmented value={textSize} onChange={(v) => set('text_size', v)}
+          options={[{ value: 'normal', label: t('size.normal') }, { value: 'large', label: t('size.large') }, { value: 'xl', label: t('size.xl') }]} />
+      </Field>
+      <Field label={t('settings.theme')}>
+        <Segmented value={theme} onChange={(v) => set('theme', v)}
+          options={[{ value: 'system', label: t('theme.system') }, { value: 'light', label: t('theme.light') }, { value: 'dark', label: t('theme.dark') }]} />
+      </Field>
     </Card>
   );
 }
@@ -486,6 +548,7 @@ function StatusRow({ label, ok, okText, badText, action }: { label: string; ok: 
 
 function SwitchModeCard({ to }: { to: 'admin' | 'member' }) {
   const { setRole } = useRole();
+  const t = useT();
   const navigate = useNavigate();
   const [asking, setAsking] = useState(false);
   const [password, setPassword] = useState('');
@@ -510,29 +573,30 @@ function SwitchModeCard({ to }: { to: 'admin' | 'member' }) {
 
   return (
     <Card>
-      <SectionTitle>App mode</SectionTitle>
+      <SectionTitle>{t('mode.title')}</SectionTitle>
       <p className="text-sm text-gray-600 mb-3">
-        {to === 'admin' ? 'This phone is in member mode.' : 'This phone is in admin mode.'}
+        {to === 'admin' ? t('mode.isMember') : 'This phone is in admin mode.'}
       </p>
       {asking ? (
         <div className="space-y-2">
-          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Admin password" />
+          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('mode.password')} />
           {error && <p className="text-sm text-red-700">{error}</p>}
-          <Button block disabled={!password} onClick={confirmAdmin}>Switch to admin</Button>
+          <Button block disabled={!password} onClick={confirmAdmin}>{t('mode.switch')}</Button>
         </div>
       ) : (
-        <Button variant="secondary" block onClick={go}>{to === 'admin' ? "I'm the group admin" : 'Switch to member mode'}</Button>
+        <Button variant="secondary" block onClick={go}>{to === 'admin' ? t('mode.imAdmin') : 'Switch to member mode'}</Button>
       )}
     </Card>
   );
 }
 
 function About() {
+  const t = useT();
   return (
     <div className="text-center text-xs text-gray-400 py-4 space-y-1">
       <img src="brand/icon-192.png" alt="" className="w-12 h-12 rounded-xl mx-auto mb-2 opacity-90" />
       <div>Powerful Weapon v{APP_VERSION}</div>
-      <div>For non-commercial use</div>
+      <div>{t('about.nonCommercial')}</div>
     </div>
   );
 }

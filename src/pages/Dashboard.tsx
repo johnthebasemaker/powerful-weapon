@@ -107,7 +107,7 @@ export default function Dashboard() {
             <span className="inline-block mt-3 rounded-full bg-gold-400 text-brand-950 text-xs font-semibold px-2.5 py-1">
               {today.book} {today.chapter}:{today.verse}
             </span>
-            <p className="tamil text-[17px] mt-3 text-white/95" style={{ lineHeight: 1.8 }}>{today.text_tamil}</p>
+            <p className="tamil text-[1.0625rem] mt-3 text-white/95" style={{ lineHeight: 1.8 }}>{today.text_tamil}</p>
             {!today.posted_at && (
               <div className="grid grid-cols-2 gap-2 mt-4">
                 <Button variant="gold" onClick={() => post(today)}><IconSend /> Post</Button>
@@ -178,20 +178,17 @@ export default function Dashboard() {
               const slot = i + 1;
               const sel = selections.find((s) => s.slot === slot);
               return (
-                <div key={slot} className={cx('px-4 py-3 flex items-start gap-3', slot === todaySlot && 'bg-gold-100/40')}>
-                  <div className="w-11 shrink-0 text-center pt-0.5">
-                    <div className="text-xs font-semibold text-gray-700">{weekdayLabel(slot)}</div>
-                    <div className="text-[11px] text-gray-400">{dateForSlot(weekStart, slot).slice(0, 5)}</div>
+                <div key={slot} className={cx('px-4 py-3', slot === todaySlot && 'bg-gold-100/40')}>
+                  {/* Header row, then the verse at full width — a side column squeezed Tamil to 2 words a line. */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-gray-700 w-9 shrink-0">{weekdayLabel(slot)}</span>
+                    <span className="text-[0.6875rem] text-gray-400 shrink-0">{dateForSlot(weekStart, slot).slice(0, 5)}</span>
+                    <span className="flex-1 min-w-0 text-sm font-medium truncate">{sel ? `${sel.book} ${sel.chapter}:${sel.verse}` : ''}</span>
+                    {sel && (sel.posted_at ? <Badge tone="green">Sent</Badge> : <Badge>Pending</Badge>)}
                   </div>
-                  {sel ? (
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium">{sel.book} {sel.chapter}:{sel.verse}</div>
-                      <div className="tamil text-[14px] text-gray-600 mt-0.5" style={{ lineHeight: 1.75 }}>{sel.text_tamil}</div>
-                    </div>
-                  ) : (
-                    <div className="flex-1 text-sm text-gray-400 italic">No verse</div>
-                  )}
-                  {sel && (sel.posted_at ? <Badge tone="green">Sent</Badge> : <Badge>Pending</Badge>)}
+                  {sel
+                    ? <div className="tamil text-[0.9375rem] text-gray-700 mt-1" style={{ lineHeight: 1.75 }}>{sel.text_tamil}</div>
+                    : <div className="text-sm text-gray-400 italic mt-1">No verse</div>}
                 </div>
               );
             })}

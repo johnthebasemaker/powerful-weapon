@@ -7,6 +7,7 @@ import { addDays, currentWeekStart, localIso } from './dates';
 import { cachedFeed, refreshFeed, verseFor, WeekFeed } from './feed';
 import { isNative } from './platform';
 import { getConfig, myStatus } from './remote';
+import { translate, Lang } from './strings';
 
 // Daily verse notifications (Android).
 //
@@ -16,10 +17,13 @@ import { getConfig, myStatus } from './remote';
 // screen was turned on. Instead we schedule one-shot, wake-up alarms
 // (allowWhileIdle) for the next DAYS days, each carrying that day's verse, and
 // rebuild the set every time the app starts or comes back to the foreground.
+// 30 days ahead: a member who doesn't open the app for weeks still gets a daily
+// reminder (days whose verse isn't downloaded yet say "tap to read"; a push
+// when the admin publishes brings them back to download it).
 
 const CHANNEL_ID = 'daily-verse';
 const BASE_ID = 1000;
-const DAYS = 14;
+const DAYS = 30;
 const LEGACY_REPEATING_ID = 1;
 
 function slotOf(d: Date): number {
@@ -85,6 +89,7 @@ export async function refreshNotifications(): Promise<RefreshResult | null> {
   const admin = role === 'admin' ? await adminVerses() : new Map<string, DayVerse>();
   const time = role === 'member' ? memberTime(settings, weeks) : settings.send_time || '06:00';
   const [hh, mm] = parseTime(time);
+  const lang: Lang = settings.ui_lang === 'ta' ? 'ta' : 'en';
 
   const now = Date.now();
   const list: LocalNotificationSchema[] = [];
@@ -113,7 +118,7 @@ export async function refreshNotifications(): Promise<RefreshResult | null> {
       list.push({
         ...base,
         title: v ? `இன்றைய வசனம் · ${ref}` : 'இன்றைய வசனம்',
-        body: v ? v.text : "Open Powerful Weapon to get this week's verses.",
+        body: v ? v.text : translate(lang, 'notif.tapToRead'),
         largeBody: v ? v.text : undefined,
       });
     } else {
@@ -126,7 +131,7 @@ export async function refreshNotifications(): Promise<RefreshResult | null> {
     }
   }
 
-  list.push(...windowNotifications(settings, role, now));
+  list.push(...windowNotifications(settings, role, now, lang));
 
   await cancelAll();
   if (list.length) await LocalNotifications.schedule({ notifications: list });
@@ -134,7 +139,7 @@ export async function refreshNotifications(): Promise<RefreshResult | null> {
 }
 
 /** Recording-window alerts from the cached server config (see syncAndSchedule). */
-function windowNotifications(settings: Record<string, string>, role: string, now: number): LocalNotificationSchema[] {
+function windowNotifications(settings: Record<string, string>, role: string, now: number, lang: Lang): LocalNotificationSchema[] {
   let w: { weekStart: string; opensAt: number; closesAt: number } | undefined;
   try { w = JSON.parse(settings.record_cfg || '{}').window; } catch { return []; }
   if (!w?.opensAt) return [];
@@ -144,11 +149,15 @@ function windowNotifications(settings: Record<string, string>, role: string, now
   const out: LocalNotificationSchema[] = [];
   const close = new Date(w.closesAt).toLocaleString('en-IN', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
   if (role === 'member' && !sent) {
-    if (w.opensAt > now + 30_000) out.push({ ...base, id: 1100, schedule: at(w.opensAt), title: 'Recording time is open 🎙️',
-      body: `Recite this week's 7 verses from memory and send them before ${close}.`, extra: { action: 'open-record' } });
+    const ta = lang === 'ta';
+    if (w.opensAt > now + 30_000) out.push({ ...base, id: 1100, schedule: at(w.opensAt),
+      title: ta ? 'பதிவு செய்யும் நேரம் தொடங்கியது 🎙️' : 'Recording time is open 🎙️',
+      body: ta ? `இந்த வாரத்தின் 7 வசனங்களையும் மனப்பாடமாகச் சொல்லி, ${close}-க்குள் அனுப்புங்கள்.` : `Recite this week's 7 verses from memory and send them before ${close}.`,
+      extra: { action: 'open-record' } });
     const remind = w.closesAt - 2 * 3600_000;
-    if (remind > now + 30_000) out.push({ ...base, id: 1101, schedule: at(remind), title: '2 hours left to send your recording',
-      body: `Recording closes ${close}.`, extra: { action: 'open-record' } });
+    if (remind > now + 30_000) out.push({ ...base, id: 1101, schedule: at(remind),
+      title: ta ? 'பதிவை அனுப்ப இன்னும் 2 மணி நேரமே உள்ளது' : '2 hours left to send your recording',
+      body: ta ? `பதிவு ${close}-க்கு மூடப்படும்.` : `Recording closes ${close}.`, extra: { action: 'open-record' } });
   }
   if (role === 'admin' && w.closesAt > now + 30_000) {
     out.push({ ...base, id: 1102, schedule: at(w.closesAt), title: 'Recording time closed',

@@ -17,7 +17,7 @@ import { Badge, Button, Card, Field, Input, Notice, PageHeader, SectionTitle, Se
 import type { Settings } from '../types';
 import { usePrefs, useT } from '../lib/prefs';
 
-const APP_VERSION = '0.0.5';
+const APP_VERSION = '0.0.6';
 
 export default function SettingsPage() {
   const { role } = useRole();

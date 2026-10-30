@@ -74,7 +74,7 @@ Run `scripts/setup-worker.sh` first, then update the app on two phones through I
 - [ ] Not-sent list → **Remind** opens WhatsApp with the message.
 - [ ] Home tab: today's verse and the week's verses are shown in full.
 
-## 0.0.5 checklist
+## 0.0.6 checklist
 
 **Before installing:** deploy the Worker (`cd stt-proxy && npx wrangler deploy`) — the app needs the new try counter.
 

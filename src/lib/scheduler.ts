@@ -4,7 +4,7 @@ import { App } from '@capacitor/app';
 import { LocalNotifications, LocalNotificationSchema } from '@capacitor/local-notifications';
 import { api } from './api';
 import { addDays, currentWeekStart, localIso } from './dates';
-import { cachedFeed, refreshFeed, verseFor, WeekFeed } from './feed';
+import { cachedFeed, refreshFeed, syncPublishedWeeks, verseFor, WeekFeed } from './feed';
 import { isNative } from './platform';
 import { getConfig, myStatus } from './remote';
 import { translate, Lang } from './strings';
@@ -178,6 +178,8 @@ export async function syncAndSchedule(): Promise<RefreshResult | null> {
   if (!isNative()) return null;
   const s = (await api().settings.getAll()) as Record<string, string>;
   if (s.app_role === 'member') await refreshFeed();
+  // Admins: pick up verses another admin published from their phone.
+  if (s.app_role === 'admin') await syncPublishedWeeks().catch(() => 0);
   // Cache the recording window (and whether this member already sent) for offline scheduling.
   try {
     const cfg = await getConfig();

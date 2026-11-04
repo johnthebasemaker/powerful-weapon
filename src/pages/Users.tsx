@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import { parseUsersCsv } from '../lib/csv';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { MAX_CSV_BYTES, parseUsersCsv } from '../lib/csv';
+import { saveTextFile } from '../lib/exportFile';
 import { api } from '../lib/api';
 import { localIso } from '../lib/dates';
 import { addMember, AdminMember, adminMembers, deleteMember, resetPin, updateMember } from '../lib/remote';
@@ -162,24 +163,77 @@ function Contacts({ users, reload }: { users: User[]; reload: () => void }) {
     } catch (e: any) { toast(`Could not add contact: ${e.message ?? e}`, 'error'); }
   }
 
-  async function importCsv() {
-    const picked = await api().files.pickCsv();
-    if (!picked) return;
-    const { rows, errors } = parseUsersCsv(picked.content);
-    if (errors.length && !confirm(`${errors.length} error(s):\n${errors.slice(0, 5).join('\n')}\n\nImport the ${rows.length} valid rows anyway?`)) return;
-    const r = (await api().users.importCsv(rows)) as { inserted: number; total: number };
-    toast(`Imported ${r.inserted} of ${r.total} contacts`, 'success');
-    reload();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [showCsv, setShowCsv] = useState(false);
+  const [csvMsg, setCsvMsg] = useState<{ ok: string; errors: string[] } | null>(null);
+
+  async function importCsv(file: File | undefined) {
+    if (!file) return;
+    if (!/\.csv$/i.test(file.name)) { setCsvMsg({ ok: '', errors: [`"${file.name}" is not a .csv file. In Excel or Google Sheets use "Save as / Download → CSV".`] }); return; }
+    if (file.size > MAX_CSV_BYTES) { setCsvMsg({ ok: '', errors: [`The file is ${Math.round(file.size / 1024)} KB — the limit is ${MAX_CSV_BYTES / 1024} KB. A members list is much smaller; check it is the right file.`] }); return; }
+    const { rows, errors } = parseUsersCsv(await file.text());
+    if (!rows.length) { setCsvMsg({ ok: '', errors: errors.length ? errors : ['No members found in the file.'] }); return; }
+    try {
+      const r = (await api().users.importCsv(rows)) as { inserted: number; total: number };
+      const skipped = r.total - r.inserted;
+      setCsvMsg({ ok: `Added ${r.inserted} contact${r.inserted === 1 ? '' : 's'}${skipped ? ` · ${skipped} already saved` : ''}.`, errors });
+      reload();
+    } catch (e: any) { setCsvMsg({ ok: '', errors: [`Could not import: ${e.message ?? e}`] }); }
   }
+
+  const sample = 'Name,Mobile number,Joined date\nPriya Selvaraj,+91 98765 43210,05-01-2026\nDaniel Raj,9876501234,12-01-2026\n';
 
   return (
     <section className="space-y-3">
       <SectionTitle action={
         <div className="flex gap-2">
-          <Button size="sm" variant="secondary" onClick={importCsv}><IconUpload /> CSV</Button>
+          <Button size="sm" variant="secondary" onClick={() => { setShowCsv(!showCsv); setCsvMsg(null); }}><IconUpload /> {showCsv ? 'Close' : 'CSV'}</Button>
           <Button size="sm" variant="secondary" onClick={() => setShowAdd(!showAdd)}>{showAdd ? 'Close' : '+ Add'}</Button>
         </div>
       }>WhatsApp contacts ({users.length})</SectionTitle>
+      {showCsv && (
+        <Card className="space-y-3">
+          <div className="text-sm font-medium text-ink">Add contacts from a CSV file</div>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            Make a sheet in Excel or Google Sheets with these 3 columns, then save or download it as <strong>.csv</strong> (up to {MAX_CSV_BYTES / 1024} KB).
+          </p>
+          <div className="overflow-x-auto rounded-xl border border-gray-200">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 text-gray-700">
+                <tr><th className="text-left px-3 py-2 font-semibold">Name</th><th className="text-left px-3 py-2 font-semibold">Mobile number</th><th className="text-left px-3 py-2 font-semibold">Joined date</th></tr>
+              </thead>
+              <tbody className="text-gray-600">
+                <tr className="border-t border-gray-100"><td className="px-3 py-2">Priya Selvaraj</td><td className="px-3 py-2">+91 98765 43210</td><td className="px-3 py-2">05-01-2026</td></tr>
+                <tr className="border-t border-gray-100"><td className="px-3 py-2">Daniel Raj</td><td className="px-3 py-2">9876501234</td><td className="px-3 py-2">12-01-2026</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <ul className="text-xs text-gray-500 space-y-1 list-disc pl-4">
+            <li>The first row must be the headings.</li>
+            <li>Joined date as DD-MM-YYYY. Leave it empty to use today.</li>
+            <li>Numbers already saved are skipped, so the same file can be imported again.</li>
+          </ul>
+          <input ref={fileInput} type="file" className="hidden"
+            accept=".csv,text/csv,text/comma-separated-values,application/csv,application/vnd.ms-excel"
+            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; importCsv(f); }} />
+          <div className="grid grid-cols-2 gap-2">
+            <Button size="sm" onClick={() => fileInput.current?.click()}><IconUpload /> Choose file</Button>
+            <Button size="sm" variant="secondary" onClick={() => saveTextFile('members-sample.csv', sample, 'text/csv')}>Get sample file</Button>
+          </div>
+          {csvMsg && (
+            <div className="space-y-1 text-sm">
+              {csvMsg.ok && <p className="text-emerald-700 font-medium">{csvMsg.ok}</p>}
+              {csvMsg.errors.length > 0 && (
+                <div className="rounded-xl bg-red-50 p-3 text-red-800 text-xs space-y-1">
+                  {csvMsg.ok && <p className="font-medium">{csvMsg.errors.length} row{csvMsg.errors.length === 1 ? '' : 's'} skipped:</p>}
+                  {csvMsg.errors.slice(0, 8).map((e) => <p key={e}>{e}</p>)}
+                  {csvMsg.errors.length > 8 && <p>…and {csvMsg.errors.length - 8} more.</p>}
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
       {showAdd && (
         <Card className="space-y-3">
           <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>

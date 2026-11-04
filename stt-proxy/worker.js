@@ -194,7 +194,8 @@ async function db(env) {
   return env.DB;
 }
 
-const DEFAULT_CONFIG = { record_dow: '7', record_from: '18:00', record_to: '22:00', extend_days: '0', max_takes: '5' };
+// mark_engine / use_calibration: the admins' auto-marking choice, shared so every admin phone marks the same way.
+const DEFAULT_CONFIG = { record_dow: '7', record_from: '18:00', record_to: '22:00', extend_days: '0', max_takes: '5', mark_engine: 'whisper', use_calibration: 'true' };
 
 async function getConfig(env) {
   const { results } = await (await db(env)).prepare('SELECT key, value FROM config').all();
@@ -301,7 +302,7 @@ async function handleFeed(request, env, path) {
         title: 'இந்த வார வசனங்கள் தயார்', body: "This week's verses are ready. Tap to open.", channel: 'daily-verse', data: { action: 'open-today' },
       });
     }
-    return json({ ok: true, weekStart: week.weekStart });
+    return json({ ok: true, weekStart: week.weekStart, publishedAt: week.publishedAt });
   }
   return json({ error: 'Method not allowed' }, 405);
 }
@@ -656,13 +657,16 @@ async function handleApi(request, env, path, url) {
   }
 
   if (path === '/admin/config' && method === 'PUT') {
-    const body = (await readBody(request)) || {};
+    // Partial updates keep the other settings (each admin screen saves only its own fields).
+    const body = { ...(await getConfig(env)), ...((await readBody(request)) || {}) };
     const clean = {
       record_dow: String(Math.min(7, Math.max(1, Number(body.record_dow) || 7))),
       record_from: /^\d{2}:\d{2}$/.test(body.record_from || '') ? body.record_from : DEFAULT_CONFIG.record_from,
       record_to: /^\d{2}:\d{2}$/.test(body.record_to || '') ? body.record_to : DEFAULT_CONFIG.record_to,
       extend_days: String(Math.min(2, Math.max(0, Number(body.extend_days) || 0))),
       max_takes: String(Math.min(10, Math.max(1, Number(body.max_takes) || 5))),
+      mark_engine: body.mark_engine === 'sarvam' ? 'sarvam' : 'whisper',
+      use_calibration: String(body.use_calibration) === 'false' ? 'false' : 'true',
     };
     await D.batch(Object.entries(clean).map(([k, v]) =>
       D.prepare('INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').bind(k, v)));

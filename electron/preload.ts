@@ -7,6 +7,7 @@ const api = {
     get: (id: number) => ipcRenderer.invoke('verses:get', id),
     toggleMemory: (id: number, isMemory: boolean) =>
       ipcRenderer.invoke('verses:toggleMemory', id, isMemory),
+    findRef: (book: string, chapter: number, verse: number) => ipcRenderer.invoke('verses:findRef', book, chapter, verse),
     count: () => ipcRenderer.invoke('verses:count'),
     importBulk: (rows: any[]) => ipcRenderer.invoke('verses:importBulk', rows),
   },

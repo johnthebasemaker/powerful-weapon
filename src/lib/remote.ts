@@ -8,6 +8,7 @@ import { feedUrl } from './feed';
 export interface RecordWindow { weekStart: string; opensAt: number; closesAt: number; open: boolean }
 export interface RecordConfig {
   record_dow: string; record_from: string; record_to: string; extend_days: string; max_takes: string;
+  mark_engine?: string; use_calibration?: string;
   window: RecordWindow;
 }
 export interface PublicMember { id: number; name: string }
@@ -162,8 +163,31 @@ export const updateMember = async (id: number, patch: { name?: string; active?: 
   call('PATCH', `/admin/members/${id}`, patch, await adminToken());
 export const deleteMember = async (id: number) => call('DELETE', `/admin/members/${id}`, undefined, await adminToken());
 
-export const saveConfig = async (cfg: Omit<RecordConfig, 'window'>) =>
+export const saveConfig = async (cfg: Partial<Omit<RecordConfig, 'window'>>) =>
   call<RecordConfig>('PUT', '/admin/config', cfg, await adminToken());
+
+/** Auto-marking choice, shared by every admin phone (kept on the server, cached locally for offline). */
+export interface MarkingPrefs { engine: 'whisper' | 'sarvam'; useCalib: boolean }
+export async function markingPrefs(): Promise<MarkingPrefs> {
+  const s = (await api().settings.getAll()) as Record<string, string>;
+  let engine = s.mark_engine;
+  let calib = s.use_calibration;
+  try {
+    const cfg = await getConfig();
+    if (cfg.mark_engine) { engine = cfg.mark_engine; await api().settings.set('mark_engine', engine); }
+    if (cfg.use_calibration) { calib = cfg.use_calibration; await api().settings.set('use_calibration', calib); }
+  } catch { /* offline: last known choice */ }
+  return { engine: engine === 'sarvam' ? 'sarvam' : 'whisper', useCalib: calib !== 'false' };
+}
+export async function saveMarkingPrefs(p: Partial<MarkingPrefs>): Promise<void> {
+  const patch: Record<string, string> = {};
+  if (p.engine) patch.mark_engine = p.engine;
+  if (p.useCalib !== undefined) patch.use_calibration = p.useCalib ? 'true' : 'false';
+  await Promise.all(Object.entries(patch).map(([k, v]) => api().settings.set(k, v)));
+  // Send the whole config: a Worker older than 0.0.7 replaces missing fields with defaults.
+  const { window: _w, ...cfg } = await getConfig();
+  await saveConfig({ ...cfg, ...patch });
+}
 
 export const listSubmissions = async (week: string) =>
   call<Submission[]>('GET', `/admin/submissions?week=${week}`, undefined, await adminToken());

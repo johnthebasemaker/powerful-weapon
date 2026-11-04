@@ -4,8 +4,9 @@ import { api } from '../lib/api';
 import { addDays, weekdayLabel } from '../lib/dates';
 import {
   allowRedo, fetchAudio, fmtWhen, getConfig, giveExtraTry, groupStatus, GroupRow, listSubmissions, needsTry, NeedsTry, RecordWindow,
-  Submission, updateSubmission,
+  markingPrefs, saveMarkingPrefs, Submission, updateSubmission,
 } from '../lib/remote';
+import { syncPublishedWeeks } from '../lib/feed';
 import { PUSH_EVENT } from '../lib/push';
 import { shareText } from '../lib/share';
 import { applyCalibration, autoMark, Calibration, Engine, loadCalibration, MarkResult, syncToLeaderboard, WeekVerse } from '../lib/autoMark';
@@ -37,9 +38,9 @@ export default function Recordings() {
   // First load: start on the week whose recording window is open / most recent.
   useEffect(() => {
     (async () => {
-      const s = (await api().settings.getAll()) as Record<string, string>;
-      if (s.mark_engine === 'sarvam') setEngine('sarvam');
-      setUseCalib(s.use_calibration !== 'false');
+      const prefs = await markingPrefs();
+      setEngine(prefs.engine);
+      setUseCalib(prefs.useCalib);
       try {
         const cfg = await getConfig();
         setWin(cfg.window);
@@ -55,7 +56,9 @@ export default function Recordings() {
     if (!week) return;
     setError('');
     try {
-      const [s, g, sel] = await Promise.all([listSubmissions(week), groupStatus(week), api().selections.get(week)]);
+      const [s, g, firstSel] = await Promise.all([listSubmissions(week), groupStatus(week), api().selections.get(week)]);
+      // The other admin may have picked this week's verses on their phone.
+      const sel = (firstSel as any[]).length ? firstSel : await syncPublishedWeeks().then(() => api().selections.get(week)).catch(() => firstSel);
       setSubs(s);
       setGroup(g.members);
       setVerses((sel as any[]).map((x) => ({ slot: x.slot, book: x.book, chapter: x.chapter, verse: x.verse, text: x.text_tamil })));
@@ -183,7 +186,7 @@ export default function Recordings() {
 
   async function changeEngine(e: Engine) {
     setEngine(e);
-    await api().settings.set('mark_engine', e);
+    await saveMarkingPrefs({ engine: e }).catch((err) => toast(`Saved on this phone only: ${err.message}`, 'error'));
   }
 
   const expiry = (s: Submission) => {

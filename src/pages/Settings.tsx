@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { api } from '../lib/api';
 import { DEFAULT_FEED_URL, lastPublished, publishWeek, refreshFeed } from '../lib/feed';
-import { fmtWhen, getConfig, gradingLog, loginAdmin, logoutAdmin, RecordConfig, saveConfig, scorePairs } from '../lib/remote';
+import { fmtWhen, getConfig, gradingLog, loginAdmin, logoutAdmin, markingPrefs, RecordConfig, saveConfig, saveMarkingPrefs, scorePairs } from '../lib/remote';
 import { saveTextFile } from '../lib/exportFile';
 import { Calibration, fitCalibration } from '../lib/autoMark';
 import AdminGate from '../components/AdminGate';
@@ -17,7 +17,7 @@ import { Badge, Button, Card, Field, Input, Notice, PageHeader, SectionTitle, Se
 import type { Settings } from '../types';
 import { usePrefs, useT } from '../lib/prefs';
 
-const APP_VERSION = '0.0.6';
+const APP_VERSION = '0.0.8';
 
 export default function SettingsPage() {
   const { role } = useRole();
@@ -302,8 +302,11 @@ function MarkingCard() {
     } catch (e: any) { toast(e.message, 'error', 5000); }
   }
 
+  const saveShared = (p: Parameters<typeof saveMarkingPrefs>[0]) =>
+    saveMarkingPrefs(p).then(() => toast('Saved for every admin phone', 'success')).catch((e) => toast(`Saved on this phone only: ${e.message}`, 'error'));
+
   useEffect(() => {
-    api().settings.getAll().then((s: any) => { setEngine(s.mark_engine || 'whisper'); setUseCalib(s.use_calibration !== 'false'); });
+    markingPrefs().then((p) => { setEngine(p.engine); setUseCalib(p.useCalib); });
     scorePairs().then((p) => { setPairs(p.length); setCalib(fitCalibration(p)); }).catch(() => {});
   }, []);
 
@@ -311,19 +314,19 @@ function MarkingCard() {
     <Card className="space-y-3">
       <SectionTitle>Auto-marking</SectionTitle>
       <Field label="Speech engine" hint="Whisper is free (Groq). Sarvam is built for Indian languages — needs SARVAM_API_KEY on the Worker. Use “Compare engines” on a recording to decide.">
-        <Select value={engine} onChange={async (e) => { setEngine(e.target.value); await api().settings.set('mark_engine', e.target.value); }}>
+        <Select value={engine} onChange={(e) => { setEngine(e.target.value); saveShared({ engine: e.target.value as 'whisper' | 'sarvam' }); }}>
           <option value="whisper">Whisper large-v3 (Groq)</option>
           <option value="sarvam">Sarvam Saaras</option>
         </Select>
       </Field>
       <label className="flex items-start gap-2 text-sm">
         <input type="checkbox" className="w-5 h-5 mt-0.5 accent-brand-600" checked={useCalib}
-          onChange={async (e) => { setUseCalib(e.target.checked); await api().settings.set('use_calibration', e.target.checked ? 'true' : 'false'); }} />
-        <span>Learn from my marks — adjust auto marks to match how I mark.</span>
+          onChange={(e) => { setUseCalib(e.target.checked); saveShared({ useCalib: e.target.checked }); }} />
+        <span>Learn from our marks — adjust auto marks to match how the admins mark.</span>
       </label>
       <p className="text-xs text-gray-500">
         {calib
-          ? `Learnt from ${calib.n} recordings you marked: average gap ${calib.maeBefore.toFixed(1)} → ${calib.maeAfter.toFixed(1)} points.`
+          ? `Learnt from ${calib.n} recordings the admins marked: average gap ${calib.maeBefore.toFixed(1)} → ${calib.maeAfter.toFixed(1)} points.`
           : `Give your own mark to ${Math.max(0, 8 - pairs)} more auto-marked recording${8 - pairs === 1 ? '' : 's'} to start learning (${pairs}/8).`}
       </p>
       <div className="rounded-xl bg-gray-50 p-3 space-y-2">

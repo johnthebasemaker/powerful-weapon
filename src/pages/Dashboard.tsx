@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { addDays, currentWeekStart, dateForSlot, weekdayLabel } from '../lib/dates';
-import { lastPublished, publishWeek } from '../lib/feed';
+import { lastPublished, publishWeek, syncPublishedWeeks } from '../lib/feed';
 import { isNative } from '../lib/platform';
 import { refreshNotifications } from '../lib/scheduler';
 import { toast } from '../lib/toast';
@@ -53,6 +53,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     load();
+    syncPublishedWeeks().then((n) => { if (n) load(); }).catch(() => {});
     const off = api().on('scheduler:fire', () => load());
     return () => off();
   }, []);

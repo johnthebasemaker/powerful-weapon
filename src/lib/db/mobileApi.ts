@@ -102,6 +102,8 @@ export const mobileApi: Window['api'] = {
       return rankVerses(rootWord, rows, limit);
     },
     get: (id: number) => get('SELECT * FROM verses WHERE id = ?', [id]),
+    findRef: (book: string, chapter: number, verse: number) =>
+      get('SELECT * FROM verses WHERE book = ? AND chapter = ? AND verse = ?', [book, chapter, verse]).then((r) => r ?? null),
     async toggleMemory(id: number, isMemory: boolean) {
       await run('UPDATE verses SET is_memory_verse = ? WHERE id = ?', [isMemory ? 1 : 0, id]);
       return { ok: true };
@@ -177,11 +179,13 @@ export const mobileApi: Window['api'] = {
       return { ok: true };
     },
     async importCsv(rows: { name: string; phone: string; joined_date: string }[]) {
+      const count = async () => (await get<{ n: number }>('SELECT COUNT(*) AS n FROM users'))?.n ?? 0;
+      const before = await count();
       await runSet(rows.map((r) => ({
         statement: 'INSERT OR IGNORE INTO users (name, phone, joined_date) VALUES (?, ?, ?)',
         values: [r.name.trim(), r.phone.trim(), r.joined_date],
       })));
-      return { inserted: rows.length, total: rows.length };
+      return { inserted: (await count()) - before, total: rows.length }; // numbers already saved are skipped
     },
   },
 

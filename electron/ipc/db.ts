@@ -22,6 +22,9 @@ export function registerDbIpc() {
     return { ok: true };
   });
 
+  ipcMain.handle('verses:findRef', (_e, book: string, chapter: number, verse: number) =>
+    getDb().prepare('SELECT * FROM verses WHERE book = ? AND chapter = ? AND verse = ?').get(book, chapter, verse) ?? null);
+
   ipcMain.handle('verses:count', () => {
     const r = getDb().prepare('SELECT COUNT(*) as n FROM verses').get() as { n: number };
     return r.n;
